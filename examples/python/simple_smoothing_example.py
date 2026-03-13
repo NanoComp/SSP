@@ -1,6 +1,7 @@
 """
-This is a simple example that demonstrates how to use the naive first-order accurate
-SSP algorithm. We set up a dummy, gradient-based optimization problem that attempts
+This is a simple example that demonstrates how to use the original "SSP1" algorithm
+for subpixel-smoothed projection, combined with bilinear interpolation and conic smoothing.
+We set up a simplistic gradient-based optimization problem that attempts
 to drive the mean of the output to zero. We set β=∞ and show the gradient is nonzero.
 """
 
