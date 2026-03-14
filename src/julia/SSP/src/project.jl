@@ -113,8 +113,8 @@ function smoothed_projection(rho_filtered_vals, rho_filtered_gradient_vals, rho_
     d = (eta .- rho_filtered_vals) ./ den_eff
     needs_smoothing = nonzero_norm .& (abs.(d) .< R_smoothing)
     d_R = d ./ R_smoothing
-    F_plus = ifelse.(needs_smoothing, 0.5 .- (15 / 16) .* d_R .+ (5 / 8) .* d_R .^ 3 .- (3 / 16) .* d_R .^ 5, 1.0)
-    F_minus = ifelse.(needs_smoothing, 0.5 .+ (15 / 16) .* d_R .- (5 / 8) .* d_R .^ 3 .+ (3 / 16) .* d_R .^ 5, 1.0)
+    F_plus = ifelse.(needs_smoothing, 1//2 .+ d_R .* evalpoly.(d_R.^2, Ref((-15//16, 5//8, -3//16))), 1.0)
+    F_minus = ifelse.(needs_smoothing, 1//2 .+ d_R .* evalpoly.(d_R.^2, Ref((15//16, -5//8, 3//16))), 1.0)
     rho_filtered_minus = rho_filtered_vals .- R_smoothing .* den_eff .* F_plus
     rho_filtered_plus = rho_filtered_vals .+ R_smoothing .* den_eff .* F_minus
 
@@ -189,7 +189,7 @@ function adjoint_smoothed_projection(adj_rho_ssp_projected, tape, rho_filtered_v
     adj_F_plus = .-adj_rho_filtered_minus .* R_smoothing .* den_eff .+ adj_rho_projected_smoothed .* (rho_plus_eff_projected .- rho_minus_eff_projected)
     adj_den_eff = R_smoothing .* (adj_rho_filtered_plus .* F_minus .- adj_rho_filtered_minus .* F_plus)
     adj_F_minus = adj_rho_filtered_plus .* R_smoothing .* den_eff
-    adj_d_R = ifelse.(needs_smoothing, adj_F_plus .* ((-15 / 16) .+ (15 / 8) .* d_R .^ 2 - (15 / 16) .* d_R .^ 4) .+ adj_F_minus .* ((15 / 16) .- (15 / 8) .* d_R .^ 2 .+ (15 / 16) .* d_R .^ 4), 0.0)
+    adj_d_R = ifelse.(needs_smoothing, adj_F_plus .* evalpoly.(d_R.^2, Ref((-15//16, 15//8, -15//16))) .+ adj_F_minus .* evalpoly.(d_R.^2, Ref((15//16, -15//8, 15//16))), 0.0)
     adj_d = adj_d_R ./ R_smoothing
     adj_rho_filtered_vals .-= adj_d ./ den_eff
     adj_den_eff .-= adj_d .* d ./ den_eff
