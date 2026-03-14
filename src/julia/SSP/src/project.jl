@@ -69,14 +69,28 @@ end
 
 
 function tanh_projection(x, beta, eta)
-    (tanh(beta * eta) + tanh(beta * (x - eta))) / (tanh(beta * eta) + tanh(beta * (1 - eta)))
+    u = beta * eta
+    v = beta * (1 - eta)
+    tanhu = tanh(u)
+    tanhv = tanh(v)
+    den = tanhu + tanhv
+    if iszero(den) # this implies β → 0^+ is causing underflow when this function should approach the identity
+        (x * oneunit(beta)) / one(den) # multiply/divide to get right units and type stability
+    else
+        (tanhu + tanh(beta * (x - eta))) / den
+    end
 end
 
 function adjoint_tanh_projection(adj_out, x, beta, eta)
-    if beta == Inf
+    if isinf(beta)
         zero(adj_out)
     else
-        adj_out * beta * sech(beta * (x - eta))^2 / (tanh(beta * eta) + tanh(beta * (1 - eta)))
+        den = tanh(beta * eta) + tanh(beta * (1 - eta))
+        if iszero(den) # this implies β → 0^+ is causing underflow when this function should approach zero
+            adj_out * zero(beta)
+        else
+            adj_out * beta * sech(beta * (x - eta))^2 / den
+        end
     end
 end
 
