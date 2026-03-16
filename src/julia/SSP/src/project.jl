@@ -104,7 +104,7 @@ function smoothed_projection(rho_filtered_vals, rho_filtered_gradient_vals, rho_
     rho_projected = tanh_projection.(rho_filtered_vals, beta, eta)
 
     den_helper = vec(mapreduce(abs2, +, rho_filtered_gradient_vals; dims=2))
-    den_helper .+= R_smoothing^2 .* vec(mapreduce(abs2, +, rho_filtered_gradient_vals; dims=(2, 3)))
+    den_helper .+= R_smoothing^2 .* vec(mapreduce(abs2, +, rho_filtered_hessian_vals; dims=(2, 3)))
 
     nonzero_norm = abs.(den_helper) .> 0
 
@@ -184,7 +184,7 @@ function adjoint_smoothed_projection(adj_rho_ssp_projected, tape, rho_filtered_v
     adj_rho_plus_eff_projected = adj_rho_projected_smoothed .* F_plus
     adj_rho_minus_eff_projected = adj_rho_projected_smoothed .* (1 .- F_plus)
     adj_rho_filtered_minus = adjoint_tanh_projection.(adj_rho_minus_eff_projected, rho_filtered_minus, beta, eta)
-    adj_rho_filtered_plus = adjoint_tanh_projection.(adj_rho_plus_eff_projected, rho_filtered_minus, beta, eta)
+    adj_rho_filtered_plus = adjoint_tanh_projection.(adj_rho_plus_eff_projected, rho_filtered_plus, beta, eta)
     adj_rho_filtered_vals .+= adj_rho_filtered_minus .+ adj_rho_filtered_plus
     adj_F_plus = .-adj_rho_filtered_minus .* R_smoothing .* den_eff .+ adj_rho_projected_smoothed .* (rho_plus_eff_projected .- rho_minus_eff_projected)
     adj_den_eff = R_smoothing .* (adj_rho_filtered_plus .* F_minus .- adj_rho_filtered_minus .* F_plus)
