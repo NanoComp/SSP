@@ -55,7 +55,12 @@ depadsol = solve!(depadsolver)
 
 filtered_design_vars = depadsol.value
 
-target_points = vec(collect(Iterators.product(grid...)))
+# projection points need not be the same as design variable grid
+target_grid = (
+    range(-1, 1, length=Nx * 2),
+    range(-1, 1, length=Ny * 2),
+)
+target_points = vec(collect(Iterators.product(target_grid...)))
 projprob = ProjectionProblem(;
     data=filtered_design_vars,
     grid,
@@ -74,7 +79,7 @@ let
     Colorbar(fig[1,2], h1)
 
     ax2 = Axis(fig[1,3]; title = "SSP2 output", aspect=DataAspect())
-    h2 = heatmap!(grid..., reshape(projected_design_vars, length.(grid)); colormap=colormap("grays"))
+    h2 = heatmap!(target_grid..., reshape(projected_design_vars, length.(target_grid)); colormap=colormap("grays"))
     Colorbar(fig[1,4], h2)
     save("design.png", fig)
 end
@@ -85,7 +90,10 @@ end
 obj = fom(projected_design_vars, grid)
 
 function adjoint_fom(adj_fom, data, grid)
-    adj_data = adj_fom .* 2 .* data .* prod(step, grid)
+    adjoint_fom!(similar(data), adj_fom, data, grid)
+end
+function adjoint_fom!(adj_data, adj_fom, data, grid)
+    adj_data .= adj_fom .* 2 .* data .* prod(step, grid)
     return adj_data
 end
 
@@ -103,7 +111,7 @@ adj_design_vars = adj_padprob.data
 let
     fig = Figure()
     ax1 = Axis(fig[1,1]; title = "SSP2 output", aspect=DataAspect())
-    h1 = heatmap!(ax1, grid..., reshape(projected_design_vars, length.(grid)); colormap=colormap("grays"))
+    h1 = heatmap!(ax1, target_grid..., reshape(projected_design_vars, length.(target_grid)); colormap=colormap("grays"))
     Colorbar(fig[1,2], h1)
 
     ax2 = Axis(fig[1,3]; title = "design variables gradient", aspect=DataAspect())
@@ -112,7 +120,7 @@ let
     save("design_gradient.png", fig)
 end
 
-fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver
+fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver, adj_projsol=adj_projsol
     function (design_vars)
 
         padsolver.data = design_vars
@@ -125,7 +133,7 @@ fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, de
         projsol = solve!(projsolver)
 
         _fom = fom(projsol.value, grid)
-        adj_projsol = adjoint_fom(1.0, projsol.value, grid)
+        adjoint_fom!(adj_projsol, 1.0, projsol.value, grid)
 
         adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
         adj_depadsol = adj_projprob.data
@@ -143,7 +151,7 @@ fom_withgradient(design_vars)
 
 h = 1e-5
 h_index = (50, 50)
-# h_index = (53, 28)
+# h_index = (38, 50)
 perturb = zero(design_vars)
 perturb[h_index...] = h
 fom_ph, = fom_withgradient(design_vars + perturb)
@@ -154,7 +162,7 @@ dfomdh = adj_design_vars[h_index...]
 
 opt = NLopt.Opt(:LD_CCSAQ, length(design_vars))
 evaluation_history = Float64[]
-my_objective_fn = let evaluation_history=evaluation_history
+my_objective_fn = let fom_withgradient=fom_withgradient, evaluation_history=evaluation_history, design_vars=design_vars
     function (x, grad)
         val, adj_design = fom_withgradient(reshape(x, size(design_vars)))
         if !isempty(grad)
@@ -165,7 +173,7 @@ my_objective_fn = let evaluation_history=evaluation_history
     end
 end
 NLopt.min_objective!(opt, my_objective_fn)
-NLopt.maxeval!(opt, 30)
+NLopt.maxeval!(opt, 50)
 fmax, xmax, ret = NLopt.optimize(opt, vec(design_vars))
 
 let
@@ -183,7 +191,7 @@ let
     h1 = scatterlines!(ax1, evaluation_history)
 
     ax2 = Axis(fig[1,2]; title = "Final SSP2 design", aspect=DataAspect())
-    h2 = heatmap!(grid..., reshape(projsol.value, length.(grid)); colormap=colormap("grays"))
+    h2 = heatmap!(target_grid..., reshape(projsol.value, length.(target_grid)); colormap=colormap("grays"))
     Colorbar(fig[1,3], h2)
     save("optimization.png", fig)
 end
