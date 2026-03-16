@@ -1,6 +1,6 @@
 module Project
 
-using FastInterpolations: cubic_interp!, cubic_adjoint, DerivOp
+using ..Interpolate: InterpolationProblem, CubicInterp, ValueWithGradientAndHessian
 import SSP: init, solve!, adjoint_solve!
 
 Base.@kwdef struct ProjectionProblem{D,G,T}
@@ -24,17 +24,20 @@ end
 
 function init(prob::ProjectionProblem, alg::SSP2)
     (; data, grid, target_points) = prob
-    # TODO refactor these workspaces as views of a single array
-    rho_filtered = similar(data, length(target_points))
-    rho_filtered_gradient = similar(data, length(target_points), length(grid))
-    rho_filtered_hessian = similar(data, length(target_points), length(grid), length(grid))
+
+    interp_prob = InterpolationProblem(; data, grid, target_points)
+    interp_alg = CubicInterp(; deriv=ValueWithGradientAndHessian())
+    interp_solver = init(interp_prob, interp_alg)
+    interp_sol = solve!(interp_solver)
+
     rho_projected = similar(data, length(target_points))
-    adj_data = similar(data)
-    adj_data_tmp = similar(data)
-    adj_rho_filtered = similar(rho_filtered)
-    adj_rho_filtered_gradient = similar(rho_filtered_gradient)
-    adj_rho_filtered_hessian = similar(rho_filtered_hessian)
-    cacheval = (; rho_filtered, rho_filtered_gradient, rho_filtered_hessian, rho_projected, adj_data, adj_data_tmp, adj_rho_filtered, adj_rho_filtered_gradient, adj_rho_filtered_hessian)
+
+    adj_rho_filtered_value = similar(interp_sol.value)
+    adj_rho_filtered_gradient = similar(interp_sol.gradient)
+    adj_rho_filtered_hessian = similar(interp_sol.hessian)
+
+    cacheval = (; interp_solver, rho_projected, adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian)
+
     return ProjectionSolver(data, grid, target_points, alg, cacheval)
 end
 
@@ -44,15 +47,18 @@ end
 
 function proj_solve!(solver, alg::SSP2)
 
-    (; data, grid, target_points, cacheval) = solver
-    (; rho_filtered, rho_filtered_gradient, rho_filtered_hessian, rho_projected) = cacheval
+    (; data, grid, cacheval) = solver
+    (; interp_solver, rho_projected) = cacheval
 
-    interpolatevaluegradienthessian!!!(rho_filtered, rho_filtered_gradient, rho_filtered_hessian, grid, data, target_points)
+    interp_solver.data = data
+    rho_filtered = solve!(interp_solver)
+
     dx_all = step.(grid)
     @assert allequal(dx_all)
     dx = first(dx_all)
     R_smoothing = 0.55 * dx
-    for (i, rho_f, rho_g, rho_h) in zip(eachindex(rho_projected), rho_filtered, eachslice(rho_filtered_gradient; dims=1), eachslice(rho_filtered_hessian; dims=1))
+
+    for (i, rho_f, rho_g, rho_h) in zip(eachindex(rho_projected), rho_filtered.value, eachslice(rho_filtered.gradient; dims=1), eachslice(rho_filtered.hessian; dims=1))
         # the calculation of the norm is not local in memory, but this is
         # because the interpolation is done as SoA whereas here we use AoS
         rho_g_normsq = sum(abs2, rho_g)
@@ -62,27 +68,6 @@ function proj_solve!(solver, alg::SSP2)
     end
     return (; value=rho_projected, tape=nothing)
 end
-
-function interpolatevaluegradienthessian!!!(interp_output, interp_gradient_output, interp_hessian_output, grid, data, target_points)
-    cubic_interp!(interp_output, grid, data, target_points)
-    ndim = Val{ndims(data)}()
-    dims = ntuple(n -> Val{n}(), ndim) # construct a type-stable tuple / range because this gets unrolled
-    dograd = function (::Val{dim}) where {dim}
-        # construct deriv tuple in a type-stable way by using a function barrier
-        deriv = ntuple(n -> DerivOp{n == dim ? 1 : 0}(), ndim)
-        out = view(interp_gradient_output, :, dim)
-        cubic_interp!(out, grid, data, target_points; deriv)
-    end
-    foreach(dograd, dims)
-    dohess = function (::Val{dim1}, ::Val{dim2}) where {dim1, dim2}
-        deriv = ntuple(n -> DerivOp{(n == dim1 ? 1 : 0) + (n == dim2 ? 1 : 0)}(), ndim)
-        out = view(interp_hessian_output, :, dim1, dim2)
-        cubic_interp!(out, grid, data, target_points; deriv)
-    end
-    foreach(dim1 -> foreach(dim2 -> dohess(dim1, dim2), dims), dims)
-    return
-end
-
 
 function tanh_projection(x, beta, eta)
     u = beta * eta
@@ -144,57 +129,35 @@ end
 
 function adjoint_proj_solve!(solver, alg::SSP2, adj_sol, tape)
 
-    (; data, grid, target_points, cacheval) = solver
-    (; rho_filtered, rho_filtered_gradient, rho_filtered_hessian, adj_data, adj_data_tmp, adj_rho_filtered, adj_rho_filtered_gradient, adj_rho_filtered_hessian) = cacheval
+    (; data, grid, cacheval) = solver
+    (; interp_solver, adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian) = cacheval
 
     # We do not keep a tape and need to repeat the forward calculation
-    interpolatevaluegradienthessian!!!(rho_filtered, rho_filtered_gradient, rho_filtered_hessian, grid, data, target_points)
+    interp_solver.data = data
+    rho_filtered = solve!(interp_solver)
 
     dx_all = step.(grid)
     @assert allequal(dx_all)
     dx = first(dx_all)
     R_smoothing = 0.55 * dx
-    for (i, adj_proj, rho_f, rho_g, rho_h) in zip(eachindex(adj_rho_filtered), adj_sol, rho_filtered, eachslice(rho_filtered_gradient; dims=1), eachslice(rho_filtered_hessian; dims=1))
+
+    for (i, adj_proj, rho_f, rho_g, rho_h) in zip(eachindex(adj_rho_filtered_value), adj_sol, rho_filtered.value, eachslice(rho_filtered.gradient; dims=1), eachslice(rho_filtered.hessian; dims=1))
         # the calculation of the norm is not local in memory, but this is
         # because the interpolation is done as SoA whereas here we use AoS
         rho_g_normsq = sum(abs2, rho_g)
         rho_h_normsq = sum(abs2, rho_h)
         rho_p, tape = smoothed_projection(rho_f, rho_g_normsq, rho_h_normsq, R_smoothing, alg.beta, alg.eta)
         adj_rho_f, adj_rho_g_normsq, adj_rho_h_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_g_normsq, rho_h_normsq, R_smoothing, alg.beta, alg.eta)
-        adj_rho_filtered[i] = adj_rho_f
+        adj_rho_filtered_value[i] = adj_rho_f
         adj_rho_filtered_gradient[i, :] .= 2adj_rho_g_normsq .* rho_g
         adj_rho_filtered_hessian[i, :, :] .= 2adj_rho_h_normsq .* rho_h
     end
-    adjoint_interpolatevaluegradienthessian!!(adj_data, adj_data_tmp, adj_rho_filtered, adj_rho_filtered_gradient, adj_rho_filtered_hessian, grid, target_points)
 
-    return (; data=adj_data, grid=nothing, target_points=nothing)
+    adj_rho_filtered = (; value=adj_rho_filtered_value, gradient=adj_rho_filtered_gradient, hessian=adj_rho_filtered_hessian)
+    adj_interp_prob = adjoint_solve!(interp_solver, adj_rho_filtered, rho_filtered.tape)
+
+    return (; data=adj_interp_prob.data, grid=nothing, target_points=nothing)
 end
-
-function adjoint_interpolatevaluegradienthessian!!(adj_data, adj_data_tmp, adj_interp_output, adj_interp_gradient_output, adj_interp_hessian_output, grid, target_points)
-    adj_op = cubic_adjoint(grid, target_points)
-    adj_op(adj_data, adj_interp_output)
-    ndim = Val{ndims(adj_data)}()
-    dims = ntuple(n -> Val{n}(), ndim) # construct a type-stable tuple / range because this gets unrolled
-    dograd = function (::Val{dim}) where {dim}
-        # construct deriv tuple in a type-stable way by using a function barrier
-        deriv = ntuple(n -> DerivOp{n == dim ? 1 : 0}(), ndim)
-        adj_op_grad = cubic_adjoint(grid, target_points; deriv)
-        adj_grad = view(adj_interp_gradient_output, :, dim)
-        adj_op_grad(adj_data_tmp, adj_grad)
-        adj_data .+= adj_data_tmp
-    end
-    foreach(dograd, dims)
-    dohess = function (::Val{dim1}, ::Val{dim2}) where {dim1, dim2}
-        deriv = ntuple(n -> DerivOp{(n == dim1 ? 1 : 0) + (n == dim2 ? 1 : 0)}(), ndim)
-        adj_op_hess = cubic_adjoint(grid, target_points; deriv)
-        adj_hess = view(adj_interp_hessian_output, :, dim1, dim2)
-        adj_op_hess(adj_data_tmp, adj_hess)
-        adj_data .+= adj_data_tmp
-    end
-    foreach(dim1 -> foreach(dim2 -> dohess(dim1, dim2), dims), dims)
-    return
-end
-
 
 function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho_filtered, rho_filtered_gradient_normsq, rho_filtered_hessian_normsq, R_smoothing, beta, eta)
     (; F_plus, F_minus, d, d_R, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected) = tape
