@@ -40,30 +40,16 @@ function init(prob::InterpolationProblem, alg::CubicInterp)
         (;)
     end
 
-    ndim = Val{ndims(data)}()
-    dims = ntuple(n -> Val{n}(), ndim) # construct a type-stable tuple / range because this gets unrolled
-
     cacheval_gradient = if alg.deriv isa ValueWithGradient || alg.deriv isa ValueWithGradientAndHessian
         interp_gradient = similar(data, length(target_points), length(grid))
-        initgradadjop = function (::Val{dim}) where {dim}
-            # construct deriv tuple in a type-stable way by using a function barrier
-            deriv = ntuple(n -> DerivOp{n == dim ? 1 : 0}(), ndim)
-            cubic_adjoint(grid, target_points; deriv)
-        end
-        adj_op_g = map(initgradadjop, dims)
-        (; interp_gradient, adj_op_g)
+        (; interp_gradient)
     else
         (;)
     end
 
     cacheval_hessian = if alg.deriv isa ValueWithGradientAndHessian
         interp_hessian = similar(data, length(target_points), length(grid), length(grid))
-        inithessadjop = function (::Val{dim1}, ::Val{dim2}) where {dim1, dim2}
-            deriv = ntuple(n -> DerivOp{(n == dim1 ? 1 : 0) + (n == dim2 ? 1 : 0)}(), ndim)
-            cubic_adjoint(grid, target_points; deriv)
-        end
-        adj_op_h = map(dim1 -> map(dim2 -> inithessadjop(dim1, dim2), dims), dims)
-        (; interp_hessian, adj_op_h)
+        (; interp_hessian)
     else
         (;)
     end
@@ -143,16 +129,17 @@ function adjoint_interp_solve!(solver, alg::CubicInterp, adj_sol, tape)
     end
 
     ndim = Val{ndims(data)}()
-    dims = ntuple(identity, ndim) # we do not need type-stable indexing into dimensions for views
+    dims = ntuple(n -> Val{n}(), ndim) # construct a type-stable tuple / range because this gets unrolled
 
     adj_prob_gradient = if alg.deriv isa ValueWithGradient || alg.deriv isa ValueWithGradientAndHessian
-        let (; adj_data, adj_data_tmp, adj_op_g) = cacheval
-            dograd = function (dim, adj_op_grad)
+        let (; adj_data, adj_data_tmp, adj_op) = cacheval
+            dograd = function (::Val{dim}) where {dim}
+                deriv = ntuple(n -> DerivOp{n == dim ? 1 : 0}(), ndim)
                 adj_grad = view(adj_sol.gradient, :, dim)
-                adj_op_grad(adj_data_tmp, adj_grad)
+                adj_op(adj_data_tmp, adj_grad; deriv)
                 adj_data .+= adj_data_tmp
             end
-            foreach(dograd, dims, adj_op_g)
+            foreach(dograd, dims)
             (;) # data adjoint is already accumulated into adj_prob_value.data
         end
     else
@@ -160,13 +147,14 @@ function adjoint_interp_solve!(solver, alg::CubicInterp, adj_sol, tape)
     end
 
     adj_prob_hessian = if alg.deriv isa ValueWithGradientAndHessian
-        let (; adj_data, adj_data_tmp, adj_op_h) = cacheval
-            dohess = function (dim1, dim2, adj_op_hess)
+        let (; adj_data, adj_data_tmp, adj_op) = cacheval
+            dohess = function (::Val{dim1}, ::Val{dim2}) where {dim1, dim2}
+                deriv = ntuple(n -> DerivOp{(n == dim1 ? 1 : 0) + (n == dim2 ? 1 : 0)}(), ndim)
                 adj_hess = view(adj_sol.hessian, :, dim1, dim2)
-                adj_op_hess(adj_data_tmp, adj_hess)
+                adj_op(adj_data_tmp, adj_hess; deriv)
                 adj_data .+= adj_data_tmp
             end
-            foreach((dim1, adj_op_h1) -> foreach((dim2, adj_op_h12) -> dohess(dim1, dim2, adj_op_h12), dims, adj_op_h1), dims, adj_op_h)
+            foreach(dim1 -> foreach(dim2 -> dohess(dim1, dim2), dims), dims)
             (;) # data adjoint is already accumulated into adj_prob_value.data
         end
     else
