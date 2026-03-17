@@ -13,7 +13,7 @@ from jax import grad, jit, value_and_grad
 from jax import numpy as jnp
 from matplotlib import pyplot as plt
 
-from ssp import conic_filter, get_conic_radius_from_eta_e, ssp_first_order
+from ssp import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
 
 
 def figure_of_merit(x: jnp.ndarray) -> float:
@@ -26,7 +26,7 @@ def figure_of_merit(x: jnp.ndarray) -> float:
 
 def full_system(x: jnp.ndarray, beta, eta_i, resolution) -> float:
     """Include the projection and FOM"""
-    return figure_of_merit(ssp_first_order(x, beta, eta_i, resolution))
+    return figure_of_merit(ssp1_bilinear(x, beta, eta_i, resolution))
 
 
 def main():
@@ -52,7 +52,7 @@ def main():
     beta = np.inf
 
     rho_filtered = conic_filter(rho, filter_radius, lx, ly, resolution)
-    rho_projected = ssp_first_order(rho_filtered, beta, eta_i, resolution)
+    rho_projected = ssp1_bilinear(rho_filtered, beta, eta_i, resolution)
 
     plt.figure(figsize=(6, 3))
     plt.subplot(1, 2, 1)
@@ -96,7 +96,7 @@ def main():
     def optimization_objective(rho_flat: jnp.ndarray) -> jnp.ndarray:
         rho_design = rho_flat.reshape((nx, ny))
         rho_design_filtered = conic_filter(rho_design, filter_radius, lx, ly, resolution)
-        rho_design_projected = ssp_first_order(
+        rho_design_projected = ssp1_bilinear(
             rho_design_filtered, beta, eta_i, resolution
         )
         return figure_of_merit(rho_design_projected)
@@ -137,7 +137,7 @@ def main():
     rho_opt = x_opt.reshape((nx, ny))
     rho_opt_filtered = conic_filter(rho_opt, filter_radius, lx, ly, resolution)
     rho_opt_projected = np.asarray(
-        ssp_first_order(rho_opt_filtered, beta, eta_i, resolution)
+        ssp1_bilinear(rho_opt_filtered, beta, eta_i, resolution)
     )
 
     print("\nOptimization complete")

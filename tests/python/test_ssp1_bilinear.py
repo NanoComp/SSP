@@ -5,7 +5,7 @@ import numpy as np
 from jax import grad, value_and_grad
 from jax import numpy as jnp
 
-from ssp import conic_filter, get_conic_radius_from_eta_e, ssp_first_order
+from ssp import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
 
 
 def figure_of_merit(x: jnp.ndarray) -> float:
@@ -15,10 +15,10 @@ def figure_of_merit(x: jnp.ndarray) -> float:
 
 def full_system(x: jnp.ndarray, beta: float, eta_i: float, resolution: int) -> float:
     """Projection followed by scalar objective."""
-    return figure_of_merit(ssp_first_order(x, beta, eta_i, resolution))
+    return figure_of_merit(ssp1_bilinear(x, beta, eta_i, resolution))
 
 
-class TestSSPFirstOrder(unittest.TestCase):
+class TestSSP1Bilinear(unittest.TestCase):
     def setUp(self):
         self.lx = 2.0
         self.ly = 2.0
@@ -44,7 +44,7 @@ class TestSSPFirstOrder(unittest.TestCase):
             self.ly,
             self.resolution,
         )
-        rho_projected = ssp_first_order(
+        rho_projected = ssp1_bilinear(
             rho_filtered,
             self.beta,
             self.eta_i,

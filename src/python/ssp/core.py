@@ -6,18 +6,18 @@ from jax import numpy as jnp
 
 from .utils import ArrayLikeType, tanh_projection
 
-def ssp_first_order(
+def ssp1_bilinear(
     rho_filtered: ArrayLikeType,
     beta: float,
     eta: float,
     resolution: float,
 ):
-    """Project using the first-order accurate subpixel smoothing, which allows for β→∞.
+    """Project using the original SSP1 algorithm with bilinear interpolation.
 
     This technique integrates out the discontinuity within the projection
     function, allowing the user to smoothly increase β from 0 to ∞ without
     losing the gradient. Effectively, a level set is created, and from this
-    level set, first-order subpixel smoothing is applied to the interfaces (if
+    level set, SSP1 bilinear subpixel smoothing is applied to the interfaces (if
     any are present).
 
     In order for this to work, the input array must already be smooth (e.g. by
@@ -108,7 +108,7 @@ def ssp_first_order(
     # have been sanitized earlier on.
     needs_smoothing = nonzero_norm & (jnp.abs(d) < R_smoothing)
 
-    # The fill factor is used to perform simple, first-order subpixel smoothing.
+    # The fill factor is used to perform the SSP1 bilinear subpixel smoothing.
     # We use the (2D) analytic expression that comes when assuming the smoothing
     # kernel is a circle. Note that because the kernel contains some
     # expressions that are sensitive to NaNs, we have to use the "double where"
