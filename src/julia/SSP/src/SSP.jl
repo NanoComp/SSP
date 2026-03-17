@@ -8,5 +8,6 @@ include("kernel.jl")
 include("convolve.jl")
 include("interpolate.jl")
 include("project.jl")
+include("constrain.jl")
 
 end
