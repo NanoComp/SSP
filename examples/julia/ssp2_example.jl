@@ -147,8 +147,6 @@ fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, de
     end
 end
 
-fom_withgradient(design_vars)
-
 h = 1e-5
 h_index = (50, 50)
 # h_index = (38, 50)
@@ -157,6 +155,8 @@ perturb[h_index...] = h
 fom_ph, = fom_withgradient(design_vars + perturb)
 fom_mh, = fom_withgradient(design_vars - perturb)
 dfomdh_fd = (fom_ph - fom_mh) / 2h
+
+fom_val, adj_design_vars = fom_withgradient(design_vars)
 dfomdh = adj_design_vars[h_index...]
 @show dfomdh_fd dfomdh
 
