@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssp"
+version = "0.1.0"
+description = "Smoothed subpixel projection (SSP) for topology optimization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "SSP Contributors" }
+]
+dependencies = [
+  "numpy>=1.24",
+  "jax>=0.4",
+]
+
+[project.optional-dependencies]
+examples = [
+  "matplotlib>=3.8",
+  "nlopt>=2.8",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src/python"]
