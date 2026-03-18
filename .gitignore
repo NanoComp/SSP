@@ -9,6 +9,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+uv.lock
+poetry.lock
+Pipfile.lock
+.pdm-python
 
 # Test/tool caches
 .pytest_cache/

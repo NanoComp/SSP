@@ -13,7 +13,7 @@ from jax import grad, jit, value_and_grad
 from jax import numpy as jnp
 from matplotlib import pyplot as plt
 
-from ssp import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
+from ssp_topopt import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
 
 
 def figure_of_merit(x: jnp.ndarray) -> float:
