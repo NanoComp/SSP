@@ -5,7 +5,7 @@ import numpy as np
 from jax import grad, value_and_grad
 from jax import numpy as jnp
 
-from ssp import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
+from ssp_topopt import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
 
 
 def figure_of_merit(x: jnp.ndarray) -> float:
@@ -18,7 +18,7 @@ def full_system(x: jnp.ndarray, beta: float, eta_i: float, resolution: int) -> f
     return figure_of_merit(ssp1_bilinear(x, beta, eta_i, resolution))
 
 
-class TestSSP1Bilinear(unittest.TestCase):
+class TestSSPTopopt1Bilinear(unittest.TestCase):
     def setUp(self):
         self.lx = 2.0
         self.ly = 2.0
