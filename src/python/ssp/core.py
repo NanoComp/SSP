@@ -6,11 +6,20 @@ from jax import numpy as jnp
 
 from .utils import ArrayLikeType, tanh_projection
 
+# Naively we might pick a smoothing radius of exactly 0.5 (such that the diameter 
+# of the smoothing kernel spans the full pixel/voxel). However, in the case when 
+# a geometry interface is defined _right_ on the edge of a voxel (which often 
+# happens when the user initializes a geometry with a specific design), no smoothing 
+# occurs. By extending the kernel slightly beyond the edge of the pixel, we account 
+# for these corner cases.
+DEFAULT_SMOOTHING_RADIUS = 0.55
+
 def ssp1_bilinear(
     rho_filtered: ArrayLikeType,
     beta: float,
     eta: float,
     resolution: float,
+    smoothing_radius: float = DEFAULT_SMOOTHING_RADIUS
 ):
     """Project using the original SSP1 algorithm with bilinear interpolation.
 
@@ -49,8 +58,9 @@ def ssp1_bilinear(
         beta: The thresholding parameter in the range [0, inf]. Determines the
             degree of binarization of the output.
         eta: The threshold point in the range [0, 1].
-        resolution: resolution of the design grid (not the Meep grid
-            resolution).
+        resolution: resolution of the design grid.
+        smoothing_radius: The smoothing radius of the kernel relative to the 
+            pixel/voxel "width."
     Returns:
         The projected and smoothed output.
 
@@ -71,10 +81,10 @@ def ssp1_bilinear(
     # and only supports 2D inputs. We'll want to generalize this to 
     # arbitrary dimensions.
 
-    # Note that currently, the underlying assumption is that the smoothing
-    # kernel is a circle, which means dx = dy.
+    # TODO [alechammond] Note that currently, the underlying assumption 
+    # is that the smoothing kernel is a circle, which means dx = dy.
     dx = dy = 1 / resolution
-    R_smoothing = 0.55 * dx
+    R_smoothing = smoothing_radius * dx
 
     rho_projected = tanh_projection(rho_filtered, beta=beta, eta=eta)
 
