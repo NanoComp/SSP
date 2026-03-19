@@ -70,15 +70,27 @@ function proj_solve!(solver, alg::SSP2)
 end
 
 function tanh_projection(x, beta, eta)
-    u = beta * eta
-    v = beta * (1 - eta)
-    tanhu = tanh(u)
-    tanhv = tanh(v)
-    den = tanhu + tanhv
-    if iszero(den) # this implies β → 0^+ is causing underflow when this function should approach the identity
-        (x * oneunit(beta)) / one(den) # multiply/divide to get right units and type stability
+    if isinf(beta)
+        z = x - eta
+        bz = beta * z
+        if z > zero(z)
+            one(bz)
+        elseif z < zero(z)
+            zero(bz)
+        else
+            one(bz) / 2
+        end
     else
-        (tanhu + tanh(beta * (x - eta))) / den
+        u = beta * eta
+        v = beta * (1 - eta)
+        tanhu = tanh(u)
+        tanhv = tanh(v)
+        den = tanhu + tanhv
+        if iszero(den) # this implies β → 0^+ is causing underflow when this function should approach the identity
+            (x * oneunit(beta)) / one(den) # multiply/divide to get right units and type stability
+        else
+            (tanhu + tanh(beta * (x - eta))) / den
+        end
     end
 end
 
