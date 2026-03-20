@@ -62,11 +62,13 @@ target_grid = (
 )
 target_points = vec(collect(Iterators.product(target_grid...)))
 projprob = ProjectionProblem(;
-    data=filtered_design_vars,
+    rho_filtered=filtered_design_vars,
     grid,
     target_points,
+    beta = Inf,
+    eta = 0.5,
 )
-projalg = SSP2(; beta=Inf, eta=0.5)
+projalg = SSP2()
 projsolver = init(projprob, projalg)
 projsol = solve!(projsolver)
 
@@ -100,7 +102,7 @@ end
 adj_projsol = adjoint_fom(1.0, projected_design_vars, grid)
 
 adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-adj_depadsol = adj_projprob.data
+adj_depadsol = adj_projprob.rho_filtered
 adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
 adj_convsol = adj_depadprob.data
 adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
@@ -129,14 +131,14 @@ fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, de
         convsol = solve!(convsolver)
         depadsolver.data = convsol.value
         depadsol = solve!(depadsolver)
-        projsolver.data = depadsol.value
+        projsolver.rho_filtered = depadsol.value
         projsol = solve!(projsolver)
 
         _fom = fom(projsol.value, grid)
         adjoint_fom!(adj_projsol, 1.0, projsol.value, grid)
 
         adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-        adj_depadsol = adj_projprob.data
+        adj_depadsol = adj_projprob.rho_filtered
         adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
         adj_convsol = adj_depadprob.data
         adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
@@ -183,7 +185,7 @@ let
     convsol = solve!(convsolver)
     depadsolver.data = convsol.value
     depadsol = solve!(depadsolver)
-    projsolver.data = depadsol.value
+    projsolver.rho_filtered = depadsol.value
     projsol = solve!(projsolver)
 
     fig = Figure()
