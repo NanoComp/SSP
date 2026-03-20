@@ -1,7 +1,7 @@
 module Project
 
 using ..Interpolate: InterpolationProblem, CubicInterp, ValueWithGradientAndHessian
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct ProjectionProblem{D,G,T,B}
     rho_filtered::D
@@ -10,6 +10,17 @@ Base.@kwdef struct ProjectionProblem{D,G,T,B}
     beta::B = eltype(rho_filtered)(Inf)
     eta::B = eltype(rho_filtered)(1//2)
     # dilation/erosion distance = 0
+end
+
+function Base.copy(prob::ProjectionProblem)
+    newprob = ProjectionProblem(;
+        rho_filtered = copy(prob.rho_filtered),
+        grid = prob.grid,
+        target_points = copy(prob.target_points),
+        beta = prob.beta,
+        eta = prob.eta,
+    )
+    return newprob
 end
 
 mutable struct ProjectionSolver{D,G,T,B,A,C}
@@ -28,12 +39,12 @@ Base.@kwdef struct SSP2{T}
     R_smoothing_factor::T=11//20
 end
 
-function init(prob::ProjectionProblem, alg::SSP2)
+function init!(prob::ProjectionProblem, alg::SSP2)
     (; rho_filtered, grid, target_points, beta, eta) = prob
 
     interp_prob = InterpolationProblem(; data=rho_filtered, grid, target_points)
     interp_alg = CubicInterp(; deriv=ValueWithGradientAndHessian())
-    interp_solver = init(interp_prob, interp_alg)
+    interp_solver = init!(interp_prob, interp_alg)
     interp_sol = solve!(interp_solver)
 
     rho_projected = similar(rho_filtered, length(target_points))

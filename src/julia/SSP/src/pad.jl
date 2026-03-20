@@ -1,6 +1,6 @@
 module Pad
 
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 abstract type AbstractSizedPadding end
 
@@ -36,6 +36,15 @@ Base.@kwdef struct PaddingProblem{D,B,G}
     grid::G=nothing
 end
 
+function Base.copy(prob::PaddingProblem)
+    newprob = PaddingProblem(;
+        data = copy(prob.data),
+        boundary = prob.boundary,
+        grid = prob.grid,
+    )
+    return newprob
+end
+
 mutable struct PaddingSolver{D,B,G,A,C}
     data::D
     boundary::B
@@ -46,7 +55,7 @@ end
 
 struct DefaultPaddingAlgorithm end
 
-function init(prob::PaddingProblem, alg::DefaultPaddingAlgorithm)
+function init!(prob::PaddingProblem, alg::DefaultPaddingAlgorithm)
     (; data, boundary, grid) = prob
     cacheval = init_cacheval(alg, boundary, data, grid)
     return PaddingSolver(data, boundary, grid, alg, cacheval)

@@ -1,12 +1,21 @@
 module Interpolate
 
 using FastInterpolations: cubic_interp!, cubic_adjoint, CubicFit, DerivOp
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct InterpolationProblem{D,G,T}
     data::D
     grid::G
     target_points::T
+end
+
+function Base.copy(prob::InterpolationProblem)
+    newprob = InterpolationProblem(;
+        data = copy(prob.data),
+        grid = prob.grid,
+        kernel = copy(prob.target_points),
+    )
+    return newprob
 end
 
 mutable struct InterpolationSolver{D,G,T,A,C}
@@ -26,7 +35,7 @@ Base.@kwdef struct CubicInterp{B,D}
     deriv::D=Value()
 end
 
-function init(prob::InterpolationProblem, alg::CubicInterp)
+function init!(prob::InterpolationProblem, alg::CubicInterp)
     (; data, grid, target_points) = prob
 
     # TODO refactor these workspaces as views of a single array

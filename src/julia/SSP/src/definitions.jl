@@ -1,6 +1,12 @@
 # Define a CommonSolve-like interface for adjoint problems
 
-function init end
+function init! end
+
+function init(prob, alg)
+    newprob = copy(prob)
+    solver = init!(newprob, alg)
+    return solver
+end
 
 function solve! end
 
