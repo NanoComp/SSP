@@ -1,11 +1,19 @@
 module Convolve
 
 using FFTW: plan_fft!, plan_bfft!
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct DiscreteConvolutionProblem{D,K}
     data::D
     kernel::K
+end
+
+function Base.copy(prob::DiscreteConvolutionProblem)
+    newprob = DiscreteConvolutionProblem(;
+        data = copy(prob.data),
+        kernel = copy(prob.kernel),
+    )
+    return newprob
 end
 
 mutable struct DiscreteConvolutionSolver{D,K,A,C}
@@ -20,7 +28,7 @@ Base.@kwdef struct FFTConvolution{F,P}
     plan_kws::P=(;)
 end
 
-function init(prob::DiscreteConvolutionProblem, alg::FFTConvolution)
+function init!(prob::DiscreteConvolutionProblem, alg::FFTConvolution)
 
     (; data, kernel) = prob
 

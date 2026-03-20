@@ -1,7 +1,7 @@
 module SSP
 
 include("definitions.jl")
-public init, solve, solve!, adjoint_solve, adjoint_solve!
+public init, init!, solve, solve!, adjoint_solve, adjoint_solve!
 
 include("pad.jl")
 include("kernel.jl")

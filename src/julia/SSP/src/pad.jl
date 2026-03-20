@@ -1,6 +1,6 @@
 module Pad
 
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 abstract type AbstractSizedPadding end
 
@@ -30,30 +30,41 @@ size_lo(bc::Inner) = .-bc.lo
 size_hi(bc::Inner) = .-bc.hi
 
 
-Base.@kwdef struct PaddingProblem{D,B}
+Base.@kwdef struct PaddingProblem{D,B,G}
     data::D
     boundary::B
+    grid::G=nothing
 end
 
-mutable struct PaddingSolver{D,B,A,C}
+function Base.copy(prob::PaddingProblem)
+    newprob = PaddingProblem(;
+        data = copy(prob.data),
+        boundary = prob.boundary,
+        grid = prob.grid,
+    )
+    return newprob
+end
+
+mutable struct PaddingSolver{D,B,G,A,C}
     data::D
     boundary::B
+    grid::G
     alg::A
     cacheval::C
 end
 
 struct DefaultPaddingAlgorithm end
 
-function init(prob::PaddingProblem, alg::DefaultPaddingAlgorithm)
-    (; data, boundary) = prob
-    cacheval = init_cacheval(alg, boundary, data)
-    return PaddingSolver(data, boundary, alg, cacheval)
+function init!(prob::PaddingProblem, alg::DefaultPaddingAlgorithm)
+    (; data, boundary, grid) = prob
+    cacheval = init_cacheval(alg, boundary, data, grid)
+    return PaddingSolver(data, boundary, grid, alg, cacheval)
 end
 
-function init_cacheval(::DefaultPaddingAlgorithm, boundary, data)
-    default_init_cacheval(boundary, data)
+function init_cacheval(::DefaultPaddingAlgorithm, boundary, data, grid)
+    default_init_cacheval(boundary, data, grid)
 end
-function default_init_cacheval(bc::AbstractSizedPadding, data)
+function default_init_cacheval(bc::AbstractSizedPadding, data, grid)
     output = similar(data, size(data) .+ size_lo(bc) .+ size_hi(bc))
     adj_data = similar(data)
     return (; output, adj_data)
@@ -63,14 +74,29 @@ function solve!(solver::PaddingSolver)
 end
 
 function pad_solve!(solver, ::DefaultPaddingAlgorithm)
-    default_pad_solve!(solver, solver.boundary, solver.data, solver.cacheval)
+    default_pad_solve!(solver, solver.boundary, solver.data, solver.grid, solver.cacheval)
 end
 
-function default_pad_solve!(solver, bc::AbstractSizedPadding, data, cacheval)
+function default_pad_solve!(solver, bc::AbstractSizedPadding, data, grid, cacheval)
     (; output) = cacheval
     _pad!(bc, output, data)
-    return (; value=output, tape=nothing)
+    padded_grid = _padgrid(bc, grid)
+    return (; value=output, padded_grid..., tape=nothing)
 end
+
+function _padgrid(::AbstractSizedPadding, ::Nothing)
+    (;)
+end
+function _padgrid(bc::AbstractSizedPadding, grid)
+    l = size_lo(bc)
+    h = size_hi(bc)
+    padded_grid = map(grid, l, h) do grid, l, h
+        range(first(grid)-l*step(grid); step=step(grid), length=length(grid)+l+h)
+        # range(first(grid)-l*step(grid), last(grid)+h*step(grid); length=length(grid)+l+h)
+    end
+    (; grid=padded_grid)
+end
+
 
 function _pad!(bc::BoundaryPadding, y, x)
     pad_lo = size_lo(bc)
