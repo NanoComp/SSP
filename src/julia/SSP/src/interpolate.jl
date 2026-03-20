@@ -13,7 +13,7 @@ function Base.copy(prob::InterpolationProblem)
     newprob = InterpolationProblem(;
         data = copy(prob.data),
         grid = prob.grid,
-        kernel = copy(prob.target_points),
+        target_points = copy(prob.target_points),
     )
     return newprob
 end
