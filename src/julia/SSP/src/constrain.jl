@@ -19,6 +19,17 @@ Base.@kwdef struct LengthConstraintProblem{D,G,DB,T,K}
     kind::K
 end
 
+function Base.copy(prob::LengthConstraintProblem)
+    newprob = LengthConstraintProblem(;
+        data_smooth = copy(prob.data_smooth),
+        grid = prob.grid,
+        data_binary = copy(prob.data_binary),
+        target_points = copy(prob.target_points),
+        kind = prob.kind,
+    )
+    return newprob
+end
+
 mutable struct LengthConstraintSolver{D,G,DB,T,K,A,C}
     data_smooth::D
     grid::G
