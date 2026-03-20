@@ -1,7 +1,7 @@
 module Constrain
 
 using ..Interpolate: InterpolationProblem, CubicInterp, ValueWithGradient
-import SSP: init, solve!, adjoint_solve!
+import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct Solid{T}
     val::T=1
@@ -35,12 +35,12 @@ Base.@kwdef struct GeometricConstraints{T,S}
     constraint_threshold::S=1e-8
 end
 
-function init(prob::LengthConstraintProblem, alg::GeometricConstraints)
+function init!(prob::LengthConstraintProblem, alg::GeometricConstraints)
     (; data_smooth, grid, data_binary, target_points, kind) = prob
     
     interp_prob = InterpolationProblem(; data=data_smooth, grid, target_points)
     interp_alg = CubicInterp(; deriv=ValueWithGradient())
-    interp_solver = init(interp_prob, interp_alg)
+    interp_solver = init!(interp_prob, interp_alg)
     interp_sol = solve!(interp_solver)
 
     c = 64 * alg.conic_radius^2
