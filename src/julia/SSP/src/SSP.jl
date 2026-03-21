@@ -9,4 +9,6 @@ include("convolve.jl")
 include("interpolate.jl")
 include("project.jl")
 
+include("pythonic_api.jl")
+
 end
