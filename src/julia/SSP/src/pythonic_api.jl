@@ -31,6 +31,15 @@ end
 
 conic_filter(args...) = conic_filter_withsolver(args...)[1]
 
+function conic_filter_rrule(adj_depadsol, padsolver, convsolver, depadsolver)
+    adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, nothing)
+    adj_convsol = adj_depadprob.data
+    adj_convprob = adjoint_solve!(convsolver, adj_convsol, nothing)
+    adj_padsol = adj_convprob.data
+    adj_padprob = adjoint_solve!(padsolver, adj_padsol, nothing)
+    return adj_padprob.data
+end
+
 function ssp_withsolver(alg, rho_filtered, beta, eta, grid)
     target_points = vec(collect(Iterators.product(grid...)))
     prob = Project.ProjectionProblem(;
@@ -48,3 +57,8 @@ end
 ssp1_linear(args...; kws...) = ssp_withsolver(Project.SSP1_linear(; kws...), args...)[1]
 ssp1(args...; kws...) = ssp_withsolver(Project.SSP1(; kws...), args...)[1]
 ssp2(args...; kws...) = ssp_withsolver(Project.SSP2(; kws...), args...)[1]
+
+function ssp_rrule(adj_rho_projected, solver)
+    adj_prob = adjoint_solve!(solver, adj_rho_projected, nothing)
+    return adj_prob.rho_filtered
+end
