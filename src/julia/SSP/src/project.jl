@@ -1,6 +1,6 @@
 module Project
 
-using ..Interpolate: InterpolationProblem, CubicInterp, ValueWithGradient, ValueWithGradientAndHessian
+using ..Interpolate: InterpolationProblem, LinearInterp, CubicInterp, ValueWithGradient, ValueWithGradientAndHessian
 import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct ProjectionProblem{D,G,T,B}
@@ -38,6 +38,7 @@ Base.@kwdef struct SSPAlg{T,I}
     R_smoothing_factor::T=11//20
     interp::I
 end
+SSP1_linear(; kws...) = SSPAlg(; interp=LinearInterp(; deriv=ValueWithGradient()), kws...)
 SSP1(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradient()), kws...)
 SSP2(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradientAndHessian()), kws...)
 
