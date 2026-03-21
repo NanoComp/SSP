@@ -35,7 +35,7 @@ mutable struct ProjectionSolver{D,G,T,B,A,C}
 end
 
 Base.@kwdef struct SSPAlg{T,I}
-    R_smoothing_factor::T=11//20
+    smoothing_radius::T=11//20
     interp::I
 end
 SSP1_linear(; kws...) = SSPAlg(; interp=LinearInterp(; deriv=ValueWithGradient()), kws...)
@@ -79,7 +79,7 @@ function proj_solve!(solver, alg::SSPAlg)
     dx_all = step.(grid)
     @assert allequal(dx_all)
     dx = first(dx_all)
-    R_smoothing = alg.R_smoothing_factor * dx
+    R_smoothing = alg.smoothing_radius * dx
 
     for (i, rho_f) in zip(eachindex(rho_projected), rho_filtered_interp.value)
         # the calculation of the norm is not local in memory, but this is
@@ -184,7 +184,7 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
     dx_all = step.(grid)
     @assert allequal(dx_all)
     dx = first(dx_all)
-    R_smoothing = alg.R_smoothing_factor * dx
+    R_smoothing = alg.smoothing_radius * dx
 
     for (i, adj_proj, rho_f) in zip(eachindex(adj_rho_filtered_interp.value), adj_sol, rho_filtered_interp.value)
         # the calculation of the norm is not local in memory, but this is
