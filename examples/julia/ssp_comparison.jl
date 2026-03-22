@@ -88,7 +88,7 @@ end
 
 let
     fig = Figure()
-    ax = Axis(fig[1,1]; title = "Optimization history", yscale=log10)
+    ax = Axis(fig[1,1]; title = "Optimization history", yscale=log10, limits = (nothing, (1e-16, 1e1)))
     for (i, (ssp, evaluation_history)) in enumerate(zip(ssp_algs, ssp_optimization_histories))
         scatterlines!(ax, evaluation_history; label=string(nameof(ssp)))
     end
