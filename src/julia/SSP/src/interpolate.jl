@@ -1,6 +1,7 @@
 module Interpolate
 
-using FastInterpolations: cubic_interp!, cubic_adjoint, CubicFit, DerivOp
+using FastInterpolations: cubic_interp!, cubic_adjoint, CubicFit, DerivOp,
+    linear_interp!, linear_adjoint
 import SSP: init!, solve!, adjoint_solve!
 
 Base.@kwdef struct InterpolationProblem{D,G,T}
@@ -30,12 +31,18 @@ struct Value end
 struct ValueWithGradient end
 struct ValueWithGradientAndHessian end
 
-Base.@kwdef struct CubicInterp{B,D}
+abstract type InterpolationAlgorithm end
+
+Base.@kwdef struct LinearInterp{D} <: InterpolationAlgorithm
+    deriv::D=Value()
+end
+
+Base.@kwdef struct CubicInterp{B,D} <: InterpolationAlgorithm
     bc::B=CubicFit()
     deriv::D=Value()
 end
 
-function init!(prob::InterpolationProblem, alg::CubicInterp)
+function init!(prob::InterpolationProblem, alg::InterpolationAlgorithm)
     (; data, grid, target_points) = prob
 
     # TODO refactor these workspaces as views of a single array
@@ -43,7 +50,7 @@ function init!(prob::InterpolationProblem, alg::CubicInterp)
         interp_value = similar(data, length(target_points))
         adj_data = similar(data)
         adj_data_tmp = similar(data) # this is only used by higher derivatives
-        adj_op = cubic_adjoint(grid, target_points)
+        adj_op = interp_adjoint_operator(alg, grid, target_points)
         (; interp_value, adj_data, adj_data_tmp, adj_op)
     else
         (;)
@@ -67,15 +74,24 @@ function init!(prob::InterpolationProblem, alg::CubicInterp)
     return InterpolationSolver(data, grid, target_points, alg, cacheval)
 end
 
+function interp_adjoint_operator(::LinearInterp, grid, target_points)
+    linear_adjoint(grid, target_points)
+end
+
+function interp_adjoint_operator(alg::CubicInterp, grid, target_points)
+    cubic_adjoint(grid, target_points; bc=alg.bc)
+end
+
 function solve!(solver::InterpolationSolver)
     interp_solve!(solver, solver.alg)
 end
 
-function interp_solve!(solver, alg::CubicInterp)
+function interp_solve!(solver, alg::InterpolationAlgorithm)
     (; data, grid, target_points, cacheval) = solver
     
     sol_value = if alg.deriv isa Value || alg.deriv isa ValueWithGradient || alg.deriv isa ValueWithGradientAndHessian
         let (; interp_value) = cacheval
+            interp!(interp_value, alg, grid, data, target_points)
             cubic_interp!(interp_value, grid, data, target_points)
             (; value=interp_value)
         end
@@ -92,7 +108,7 @@ function interp_solve!(solver, alg::CubicInterp)
                 # construct deriv tuple in a type-stable way by using a function barrier
                 deriv = ntuple(n -> DerivOp{n == dim ? 1 : 0}(), ndim)
                 out = view(interp_gradient, :, dim)
-                cubic_interp!(out, grid, data, target_points; deriv)
+                interp!(out, alg, grid, data, target_points; deriv)
             end
             foreach(dograd, dims)
             (; gradient=interp_gradient)
@@ -106,7 +122,7 @@ function interp_solve!(solver, alg::CubicInterp)
             dohess = function (::Val{dim1}, ::Val{dim2}) where {dim1, dim2}
                 deriv = ntuple(n -> DerivOp{(n == dim1 ? 1 : 0) + (n == dim2 ? 1 : 0)}(), ndim)
                 out = view(interp_hessian, :, dim1, dim2)
-                cubic_interp!(out, grid, data, target_points; deriv)
+                interp!(out, alg, grid, data, target_points; deriv)
             end
             foreach(dim1 -> foreach(dim2 -> dohess(dim1, dim2), dims), dims)
             (; hessian=interp_hessian)
@@ -120,11 +136,19 @@ function interp_solve!(solver, alg::CubicInterp)
     return sol
 end
 
+function interp!(interp_value, alg::LinearInterp, grid, data, target_points; kws...)
+    linear_interp!(interp_value, grid, data, target_points; kws...)
+end
+
+function interp!(interp_value, alg::CubicInterp, grid, data, target_points; kws...)
+    cubic_interp!(interp_value, grid, data, target_points; bc=alg.bc, kws...)
+end
+
 function adjoint_solve!(solver::InterpolationSolver, adj_sol, tape)
     adjoint_interp_solve!(solver, solver.alg, adj_sol, tape)
 end
 
-function adjoint_interp_solve!(solver, alg::CubicInterp, adj_sol, tape)
+function adjoint_interp_solve!(solver, alg::InterpolationAlgorithm, adj_sol, tape)
     (; data, grid, target_points, cacheval) = solver
 
     adj_prob_value = if alg.deriv isa Value || alg.deriv isa ValueWithGradient || alg.deriv isa ValueWithGradientAndHessian

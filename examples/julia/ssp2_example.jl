@@ -3,7 +3,7 @@ using SSP: Kernel, Pad, Convolve, Project
 using .Kernel: conickernel
 using .Pad: FillPadding, BoundaryPadding, Inner, PaddingProblem, DefaultPaddingAlgorithm
 using .Convolve: DiscreteConvolutionProblem, FFTConvolution
-using .Project: ProjectionProblem, SSP2
+using .Project: ProjectionProblem, SSP1_linear, SSP1, SSP2
 
 using Random
 using CairoMakie
@@ -29,8 +29,8 @@ kernel = conickernel(grid, radius)
 
 padprob = PaddingProblem(;
     data = design_vars,
-    # boundary = BoundaryPadding(size(kernel) .- 1, size(kernel) .- 1),
-    boundary = FillPadding(1.0, size(kernel) .- 1, size(kernel) .- 1),
+    boundary = BoundaryPadding(size(kernel) .- 1, size(kernel) .- 1),
+    # boundary = FillPadding(1.0, size(kernel) .- 1, size(kernel) .- 1),
 )
 padalg = DefaultPaddingAlgorithm()
 padsolver = init(padprob, padalg)
@@ -57,8 +57,8 @@ filtered_design_vars = depadsol.value
 
 # projection points need not be the same as design variable grid
 target_grid = (
-    range(-1, 1, length=Nx * 2),
-    range(-1, 1, length=Ny * 2),
+    range(-1, 1, length=Nx * 1),
+    range(-1, 1, length=Ny * 1),
 )
 target_points = vec(collect(Iterators.product(target_grid...)))
 projprob = ProjectionProblem(;
@@ -68,6 +68,8 @@ projprob = ProjectionProblem(;
     beta = Inf,
     eta = 0.5,
 )
+# projalg = SSP1_linear()
+# projalg = SSP1()
 projalg = SSP2()
 projsolver = init(projprob, projalg)
 projsol = solve!(projsolver)
@@ -87,7 +89,7 @@ let
 end
 
 function fom(data, grid)
-    return sum(abs2, data) * prod(step, grid)
+    return sum(abs2, data) / length(data)
 end
 obj = fom(projected_design_vars, grid)
 
@@ -95,7 +97,7 @@ function adjoint_fom(adj_fom, data, grid)
     adjoint_fom!(similar(data), adj_fom, data, grid)
 end
 function adjoint_fom!(adj_data, adj_fom, data, grid)
-    adj_data .= adj_fom .* 2 .* data .* prod(step, grid)
+    adj_data .= (adj_fom / length(data)) .* 2 .* data
     return adj_data
 end
 
@@ -189,7 +191,7 @@ let
     projsol = solve!(projsolver)
 
     fig = Figure()
-    ax1 = Axis(fig[1,1]; title = "Objective history", yscale=log10)
+    ax1 = Axis(fig[1,1]; title = "Objective history", yscale=log10, limits = (nothing, (1e-16, 1e1)))
     h1 = scatterlines!(ax1, evaluation_history)
 
     ax2 = Axis(fig[1,2]; title = "Final SSP2 design", aspect=DataAspect())

@@ -10,4 +10,6 @@ include("interpolate.jl")
 include("project.jl")
 include("constrain.jl")
 
+include("pythonic_api.jl")
+
 end
