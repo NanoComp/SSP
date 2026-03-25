@@ -26,8 +26,8 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.24",
-  jax>=0.4,<=0.7.2,
-  "interpax==0.3.13",
+  "jax>=0.4,<=0.7.2",
+  "interpax>=0.3.13",
 ]
 
 [project.urls]
