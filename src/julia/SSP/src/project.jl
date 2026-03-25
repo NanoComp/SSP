@@ -3,6 +3,14 @@ module Project
 using ..Interpolate: InterpolationProblem, LinearInterp, CubicInterp, ValueWithGradient, ValueWithGradientAndHessian
 import SSP: init!, solve!, adjoint_solve!
 
+public ProjectionProblem, SSP1_linear, SSP1, SSP2
+
+"""
+    ProjectionProblem(; rho_filtered, grid, target_points, beta=Inf, eta=1/2)
+
+Define a problem for projecting smoothed data `rho_filtered` defined on a `grid`, i.e. a tuple of range, at a list of selected `target_points`, i.e. a vector of coordinate tuples.
+The projection pushes `rho` values above `eta` towards 1 and `rho` values below `eta` towards 0 with a stiffnes parameter `beta`.
+"""
 Base.@kwdef struct ProjectionProblem{D,G,T,B}
     rho_filtered::D
     grid::G
@@ -38,8 +46,29 @@ Base.@kwdef struct SSPAlg{T,I}
     smoothing_radius::T=11//20
     interp::I
 end
+
+"""
+    SSP1_linear(; smoothing_radius = 0.55)
+
+Perform a smoothed subpixel projection employing linear interpolation of the filtered density that is not differentiable through topology changes.
+The `smoothing_radius` keyword sets the radius of the smoothing kernel relative to the grid spacing.
+"""
 SSP1_linear(; kws...) = SSPAlg(; interp=LinearInterp(; deriv=ValueWithGradient()), kws...)
+
+"""
+    SSP1(; smoothing_radius = 0.55)
+
+Perform a smoothed subpixel projection employing cubic interpolation of the filtered density that is not differentiable through topology changes.
+The `smoothing_radius` keyword sets the radius of the smoothing kernel relative to the grid spacing.
+"""
 SSP1(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradient()), kws...)
+
+"""
+    SSP2(; smoothing_radius = 0.55)
+
+Perform a smoothed subpixel projection employing cubic interpolation of the filtered density that is differentiable through topology changes.
+The `smoothing_radius` keyword sets the radius of the smoothing kernel relative to the grid spacing.
+"""
 SSP2(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradientAndHessian()), kws...)
 
 function init!(prob::ProjectionProblem, alg::SSPAlg)
