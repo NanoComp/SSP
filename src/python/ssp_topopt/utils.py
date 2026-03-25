@@ -317,7 +317,7 @@ def gradient(x:             np.ndarray,
 
       Args:
           x: 2d input array sampled on the design grid.
-          resolution: design-grid resolution, allowing isotropic or anisotropic input.
+          resolution: design-grid resolution.
           method: interpolation method. See
               https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
               for the available methods.
@@ -351,7 +351,7 @@ def hessian(x:             np.ndarray,
 
       Args:
           x: 2d input array sampled on the design grid.
-          resolution: design-grid resolution, allowing isotropic or anisotropic input.
+          resolution: design-grid resolution.
           method: interpolation method. See
               https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
               for the available methods.
