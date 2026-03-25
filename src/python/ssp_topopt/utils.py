@@ -313,6 +313,18 @@ def gradient(x:             np.ndarray,
              resolution:    float,
              method:        str = 'cubic2'
              ):
+      """Compute the spatial gradient of a 2D field via differentiable interpolation.
+
+      Args:
+          x: 2d input array sampled on the design grid.
+          resolution: design-grid resolution, allowing isotropic or anisotropic input.
+          method: interpolation method. See
+              https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
+              for the available methods.
+
+      Returns:
+          A `(Nx, Ny, 2)` array containing the x- and y-derivatives at each grid point.
+      """
 
       resolution = _get_resolution(resolution)
       dx         = 1/resolution[0]
@@ -335,6 +347,18 @@ def hessian(x:             np.ndarray,
              resolution:    float,
              method:        str = 'cubic2'
              ):
+      """Compute the spatial Hessian of a 2D field via differentiable interpolation.
+
+      Args:
+          x: 2d input array sampled on the design grid.
+          resolution: design-grid resolution, allowing isotropic or anisotropic input.
+          method: interpolation method. See
+              https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
+              for the available methods.
+
+      Returns:
+          A `(Nx, Ny, 2, 2)` array containing the second derivatives at each grid point.
+      """
 
       resolution = _get_resolution(resolution)
       dx         = 1/resolution[0]
