@@ -4,6 +4,14 @@ using FastInterpolations: cubic_interp!, cubic_adjoint, CubicFit, DerivOp,
     linear_interp!, linear_adjoint
 import SSP: init!, solve!, adjoint_solve!
 
+public InterpolationProblem, LinearInterp, CubicInterp
+public Value, ValueWithGradient, ValueWithGradientAndHessian
+
+"""
+    InterpolationProblem(; data, grid, target_points)
+
+Define an interpolation problem of a multidimensional `data` array over a `grid`, i.e. a tuple of ranges, queried at a list of `target_points`, i.e. a vector of coordinate tuples or SVectors.
+"""
 Base.@kwdef struct InterpolationProblem{D,G,T}
     data::D
     grid::G
@@ -27,16 +35,51 @@ mutable struct InterpolationSolver{D,G,T,A,C}
     cacheval::C
 end
 
+"""
+    Value()
+
+Singleton type to request the interpolation return the value of the interpolant at the target points as the `value` field of the solution.
+"""
 struct Value end
+
+"""
+    ValueWithGradient()
+
+Singleton type to request the interpolation return the value and gradient of the interpolant at the target points as the `value` and `gradient` fields of the solution.
+"""
 struct ValueWithGradient end
+
+"""
+    ValueWithGradientandHessian()
+
+Singleton type to request the interpolation return the value, gradient, and hessian of the interpolant at the target points as the `value`, `gradient`, and `hessian` fields of the solution.
+"""
 struct ValueWithGradientAndHessian end
 
+"""
+    InterpolationAlgorithm
+
+Supertype for FastInterpolations.jl interpolations
+"""
 abstract type InterpolationAlgorithm end
 
+"""
+    LinearInterp(; deriv=Value())
+
+Perform linear interpolation of the data with no extrapolation.
+Optionally compute higher derivatives by modifying the `deriv` keyword.
+"""
 Base.@kwdef struct LinearInterp{D} <: InterpolationAlgorithm
     deriv::D=Value()
 end
 
+"""
+    CubicInterp(; bc=CubicFit(), deriv=Value())
+
+Perform cubic interpolation of the data with no extrapolation.
+Uses the default `bc` from FastInterpolations.jl to determine the interpolation boundary conditions.
+Optionally compute higher derivatives by modifying the `deriv` keyword.
+"""
 Base.@kwdef struct CubicInterp{B,D} <: InterpolationAlgorithm
     bc::B=CubicFit()
     deriv::D=Value()

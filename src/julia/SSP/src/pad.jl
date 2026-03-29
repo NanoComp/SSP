@@ -2,11 +2,37 @@ module Pad
 
 import SSP: init!, solve!, adjoint_solve!
 
+public PaddingProblem, DefaultPaddingAlgorithm
+public FillPadding, BoundaryPadding, Inner
+
+"""
+    AbstractSizedPadding
+
+Supertype for flavors of array padding of a fixed size.
+Concrete types must implement [`size_lo`](@ref) and [`size_hi`](@ref).
+"""
 abstract type AbstractSizedPadding end
 
+"""
+    size_lo(::AbstractSizedPadding)::Tuple{Vararg{Int}}
+
+Return the size of the padding of the beginning of an array as a tuple of integers.
+"""
 function size_lo end
+
+"""
+    size_hi(::AbstractSizedPadding)::Tuple{Vararg{Int}}
+
+Return the size of the padding of the end of an array as a tuple of integers.
+"""
 function size_hi end
 
+"""
+    FillPadding(value, lo, hi)
+
+Pads an array with a given `value` with a padding size of `lo` at the beginning of the array and `hi` at the end of the array.
+`lo` and `hi` must be of the same type as the `size` of the array.
+"""
 struct FillPadding{V,T} <: AbstractSizedPadding
     value::V
     lo::T
@@ -15,6 +41,13 @@ end
 size_lo(bc::FillPadding) = bc.lo
 size_hi(bc::FillPadding) = bc.hi
 
+"""
+    BoundaryPadding(lo, hi)
+
+Pads an array by extending the values at the boundary to a padding size of `lo` at the beginning of the array and `hi` at the end of the array.
+Equivalent to setting the value of the padding pixels equal to the value of the nearest pixel in the image.
+`lo` and `hi` must be of the same type as the `size` of the array.
+"""
 struct BoundaryPadding{T} <: AbstractSizedPadding
     lo::T
     hi::T
@@ -22,6 +55,12 @@ end
 size_lo(bc::BoundaryPadding) = bc.lo
 size_hi(bc::BoundaryPadding) = bc.hi
 
+"""
+    Inner(lo, hi)
+
+Removes an array's padding by truncating `lo` entries at the beginning of the array and `hi` entries at the end of the array.
+`lo` and `hi` must be of the same type as the `size` of the array.
+"""
 struct Inner{T} <: AbstractSizedPadding
     lo::T
     hi::T
@@ -29,7 +68,15 @@ end
 size_lo(bc::Inner) = .-bc.lo
 size_hi(bc::Inner) = .-bc.hi
 
+"""
+    PaddingProblem(; data, boundary, grid=nothing)
 
+Defines a problem of padding an array of `data` using a style of `boundary` padding.
+Boundary padding styles include [`BoundaryPadding`](@ref), [`FillPadding`](@ref), and [`Inner`](@ref).
+Optionally, if the data are defined on a `grid`, a tuple of ranges, then the `grid` is also extended to the size of the padded array.
+
+The solution of a `PaddingProblem` contains a `value` field with the padded data, a `tape` field for the adjoint solve, and possibly a `grid` field with the padded grid.
+"""
 Base.@kwdef struct PaddingProblem{D,B,G}
     data::D
     boundary::B
@@ -53,6 +100,11 @@ mutable struct PaddingSolver{D,B,G,A,C}
     cacheval::C
 end
 
+"""
+    DefaultPaddingAlgorithm()
+
+Default algorithm for padding arrays.
+"""
 struct DefaultPaddingAlgorithm end
 
 function init!(prob::PaddingProblem, alg::DefaultPaddingAlgorithm)

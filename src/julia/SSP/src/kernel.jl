@@ -1,5 +1,14 @@
 module Kernel
 
+public conickernel
+
+"""
+    conickernel(grids, radius)
+
+Returns an array with values of a conic filtering kernel with a support of `2radius` with the same resolution as `grids`.
+`grids` must be a tuple of ranges with the same number of ranges as dimensions of the kernel.
+Additionally, the kernel is normalized to sum to unity.
+"""
 function conickernel(grids, radius)
     diam = 2radius
     convolving_grids = map(grids) do grid

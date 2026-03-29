@@ -3,6 +3,14 @@ module Convolve
 using FFTW: plan_fft!, plan_bfft!
 import SSP: init!, solve!, adjoint_solve!
 
+public DiscreteConvolutionProblem, FFTConvolution
+
+"""
+    DiscreteConvolutionProblem(; data, kernel)
+
+Performs a discrete convolution of arrays `data` and `kernel`, returning an array of the same size as `data`.
+Here, the data are implicitly zero-padded.
+"""
 Base.@kwdef struct DiscreteConvolutionProblem{D,K}
     data::D
     kernel::K
@@ -23,6 +31,13 @@ mutable struct DiscreteConvolutionSolver{D,K,A,C}
     cacheval::C
 end
 
+"""
+    FFTConvolution(; factors=(2,3,5,7), plan_kws=(;))
+
+Calculate a discrete convolution by extending it to a periodic convolution accelerated via FFTs.
+Uses FFTW.jl and pads the transform to the next 7-smooth number by default, controlled by the `factors` keyword.
+Additional plan keywords can be passed as a named tuple to `plan_kws`.
+"""
 Base.@kwdef struct FFTConvolution{F,P}
     factors::F=(2,3,5,7)
     plan_kws::P=(;)
