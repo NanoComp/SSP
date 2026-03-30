@@ -194,8 +194,8 @@ end
 
 function adjoint_default_pad_solve!(solver, bc::AbstractSizedPadding, data, cacheval, adj_output, tape)
     (; adj_data, output) = cacheval
-    @assert size(output) == size(adj_output)
-    _adjoint_pad!(bc, adj_data, adj_output)
+    @assert size(output) == size(adj_output.value)
+    _adjoint_pad!(bc, adj_data, adj_output.value)
     return (; data=adj_data, boundary=nothing)
 end
 

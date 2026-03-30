@@ -101,14 +101,15 @@ function adjoint_fom!(adj_data, adj_fom, data, grid)
     return adj_data
 end
 
-adj_projsol = adjoint_fom(1.0, projected_design_vars, grid)
+adj_rho_projected = adjoint_fom(1.0, projected_design_vars, grid)
 
+adj_projsol = (; value=adj_rho_projected)
 adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-adj_depadsol = adj_projprob.rho_filtered
+adj_depadsol = (; value=adj_projprob.rho_filtered)
 adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
-adj_convsol = adj_depadprob.data
+adj_convsol = (; value=adj_depadprob.data)
 adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
-adj_padsol = adj_convprob.data
+adj_padsol = (; value=adj_convprob.data)
 adj_padprob = adjoint_solve!(padsolver, adj_padsol, padsol.tape)
 adj_design_vars = adj_padprob.data
 
@@ -124,7 +125,7 @@ let
     save("design_gradient.png", fig)
 end
 
-fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver, adj_projsol=adj_projsol
+fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver, adj_rho_projected=adj_rho_projected
     function (design_vars)
 
         padsolver.data = design_vars
@@ -137,31 +138,30 @@ fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, de
         projsol = solve!(projsolver)
 
         _fom = fom(projsol.value, grid)
-        adjoint_fom!(adj_projsol, 1.0, projsol.value, grid)
+        adjoint_fom!(adj_rho_projected, 1.0, projsol.value, grid)
 
+        adj_projsol = (; value=adj_rho_projected)
         adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-        adj_depadsol = adj_projprob.rho_filtered
+        adj_depadsol = (; value=adj_projprob.rho_filtered)
         adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
-        adj_convsol = adj_depadprob.data
+        adj_convsol = (; value=adj_depadprob.data)
         adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
-        adj_padsol = adj_convprob.data
+        adj_padsol = (; value=adj_convprob.data)
         adj_padprob = adjoint_solve!(padsolver, adj_padsol, padsol.tape)
         adj_design_vars = adj_padprob.data
         return _fom, adj_design_vars
     end
 end
 
-h = 1e-5
-h_index = (50, 50)
-# h_index = (38, 50)
-perturb = zero(design_vars)
-perturb[h_index...] = h
+h = 1e-6
+Random.seed!(0)
+perturb = h * randn(size(design_vars))
 fom_ph, = fom_withgradient(design_vars + perturb)
 fom_mh, = fom_withgradient(design_vars - perturb)
 dfomdh_fd = (fom_ph - fom_mh) / 2h
 
 fom_val, adj_design_vars = fom_withgradient(design_vars)
-dfomdh = adj_design_vars[h_index...]
+dfomdh = 2sum(adj_design_vars .* perturb) / 2h
 @show dfomdh_fd dfomdh
 
 opt = NLopt.Opt(:LD_CCSAQ, length(design_vars))

@@ -2,7 +2,7 @@ using Test
 using FiniteDifferences
 using ImageFiltering: padarray, Pad, Fill
 using SSP
-
+using Random
 
 Nx = Ny = 10
 grid = (
@@ -30,12 +30,12 @@ for (refborder, sspborder) in [
     @test collect(pad_ref) == sol.value
 
     # test that adjoints match finite differences
-    perturb_index = (3, 7)
-    test = let perturb_index=perturb_index, data=copy(data)
-        function (x)
-            data[perturb_index...] = x
+    Random.seed!(0)
+    perturb = randn(size(data))
+    test = let perturb=perturb, data=copy(data)
+        function (h)
             prob = SSP.Pad.PaddingProblem(;
-                data,
+                data = data + h * perturb,
                 boundary = sspborder,
             )
             alg = SSP.Pad.DefaultPaddingAlgorithm()
@@ -43,8 +43,7 @@ for (refborder, sspborder) in [
             return sum(abs2, sol.value)
         end
     end
-    xi = 1.0
-    dtest_di_fd = central_fdm(5, 1)(test, xi)
+    dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
     prob = SSP.Pad.PaddingProblem(;
         data,
@@ -52,8 +51,8 @@ for (refborder, sspborder) in [
     )
     alg = SSP.Pad.DefaultPaddingAlgorithm()
     solver = SSP.init(prob, alg)
-    solver.data[perturb_index...] = xi
     sol = SSP.solve!(solver)
-    adj_prob = SSP.adjoint_solve!(solver, 2*sol.value, nothing)
-    @test dtest_di_fd ≈ adj_prob.data[perturb_index...]
+    adj_sol = (; value=2*sol.value)
+    adj_prob = SSP.adjoint_solve!(solver, adj_sol, nothing)
+    @test dtest_di_fd ≈ sum(adj_prob.data .* perturb)
 end

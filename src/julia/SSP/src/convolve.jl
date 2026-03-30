@@ -1,6 +1,6 @@
 module Convolve
 
-using FFTW: plan_fft!, plan_bfft!
+using FFTW: plan_fft!, plan_bfft!, plan_rfft, plan_brfft, mul!
 import SSP: init!, solve!, adjoint_solve!
 
 public DiscreteConvolutionProblem, FFTConvolution
@@ -10,6 +10,7 @@ public DiscreteConvolutionProblem, FFTConvolution
 
 Performs a discrete convolution of arrays `data` and `kernel`, returning an array of the same size as `data`.
 Here, the data are implicitly zero-padded.
+The kernel is assumed to be constant and is not allowed to change after `init`.
 """
 Base.@kwdef struct DiscreteConvolutionProblem{D,K}
     data::D
@@ -24,9 +25,8 @@ function Base.copy(prob::DiscreteConvolutionProblem)
     return newprob
 end
 
-mutable struct DiscreteConvolutionSolver{D,K,A,C}
+mutable struct DiscreteConvolutionSolver{D,A,C}
     data::D
-    const kernel::K
     alg::A
     cacheval::C
 end
@@ -46,22 +46,31 @@ end
 function init!(prob::DiscreteConvolutionProblem, alg::FFTConvolution)
 
     (; data, kernel) = prob
+    @assert isreal(zero(eltype(data)))
+    @assert isreal(zero(eltype(kernel)))
 
     N = size(data) # number of target points
     K = size(kernel) # support of kernel
     transformsize = N .+ K .- 1
     fftsize = map(x -> nextprod(alg.factors, x), transformsize)
 
-    fftkernel = zeros(ComplexF64, fftsize...)
-    fftconv = zeros(ComplexF64, fftsize...)
+    signal = zeros(float(promote_type(eltype(data), eltype(kernel))), fftsize...)
 
-    plan_fw = plan_fft!(fftconv; alg.plan_kws...)
-    plan_bk = plan_bfft!(fftconv; alg.plan_kws...)
+    plan_fw = plan_rfft(signal; alg.plan_kws...)
+    fftconv = plan_fw * signal
+    
+    # precompute the fft of the kernel
+    fill!(signal, zero(eltype(signal)))
+    copy!(view(signal, axes(kernel)...), kernel)
+    fftkernel = plan_fw * signal
+
+    plan_bk = plan_brfft(fftconv, fftsize[1]; alg.plan_kws...)
+    conv = plan_bk * fftconv
 
     output = similar(data)
     adj_data = similar(data)
-    cacheval = (; fftsize, fftkernel, fftconv, plan_fw, plan_bk, output, adj_data)
-    return DiscreteConvolutionSolver(data, kernel, alg, cacheval)
+    cacheval = (; fftsize, signal, K, fftkernel, fftconv, conv, plan_fw, plan_bk, output, adj_data)
+    return DiscreteConvolutionSolver(data, alg, cacheval)
 end
 
 function solve!(solver::DiscreteConvolutionSolver)
@@ -69,27 +78,22 @@ function solve!(solver::DiscreteConvolutionSolver)
 end
 
 function conv_solve!(solver, ::FFTConvolution)
-    (; data, kernel, cacheval) = solver
-    (; fftsize, fftkernel, fftconv, plan_fw, plan_bk, output, adj_data) = cacheval
+    (; data, cacheval) = solver
+    (; fftsize, signal, K, fftkernel, fftconv, conv, plan_fw, plan_bk, output, adj_data) = cacheval
 
-    fill!(fftkernel, zero(eltype(fftkernel)))
-    copy!(view(fftkernel, axes(kernel)...), kernel)
-    plan_fw * fftkernel
-
-    fill!(fftconv, zero(eltype(fftconv)))
-    copy!(view(fftconv, axes(data)...), data)
-    plan_fw * fftconv
+    fill!(signal, zero(eltype(signal)))
+    copy!(view(signal, axes(data)...), data)
+    mul!(fftconv, plan_fw, signal)
 
     fftconv .*= fftkernel ./ prod(fftsize)
 
-    plan_bk * fftconv
+    mul!(conv, plan_bk, fftconv)
 
     N = size(data) # number of target points
-    K = size(kernel) # support of kernel
     target_indices = map((n, k) -> k÷2+1:n+k÷2, N, K)
 
-    elt = eltype(data) <: Real && eltype(kernel) <: Real ? real : identity
-    output .= elt.(view(fftconv, target_indices...))
+    elt = eltype(data) <: Real ? real : identity
+    output .= elt.(view(conv, target_indices...))
 
     return (; value = output, tape = nothing)
 end
@@ -99,28 +103,24 @@ function adjoint_solve!(solver::DiscreteConvolutionSolver, adj_output, tape)
 end
 
 function adjoint_conv_solve!(solver, ::FFTConvolution, adj_output, tape)
-    (; data, kernel, cacheval) = solver
-    (; fftsize, fftkernel, fftconv, plan_fw, plan_bk, output, adj_data) = cacheval
-
-    fill!(fftkernel, zero(eltype(fftkernel)))
-    copy!(view(fftkernel, axes(kernel)...), kernel)
-    plan_fw * fftkernel
+    (; data, cacheval) = solver
+    (; fftsize, signal, K, fftkernel, fftconv, conv, plan_fw, plan_bk, output, adj_data) = cacheval
 
     N = size(data) # number of target points
-    K = size(kernel) # support of kernel
     target_indices = map((n, k) -> k÷2+1:n+k÷2, N, K)
 
-    elt = eltype(data) <: Real && eltype(kernel) <: Real ? real : identity
-    fill!(fftconv, zero(eltype(fftconv)))
-    view(fftconv, target_indices...) .= elt.(adj_output)
-    plan_fw * fftconv
+    elt = eltype(data) <: Real ? real : identity
+    fill!(conv, zero(eltype(conv)))
+    view(conv, target_indices...) .= elt.(adj_output.value)
+    mul!(fftconv, plan_fw, conv)
 
     fftconv .*= conj.(fftkernel) ./ prod(fftsize)
 
-    plan_bk * fftconv
+    mul!(signal, plan_bk, fftconv)
 
-    adj_data .= elt.(view(fftconv, axes(data)...))
+    adj_data .= elt.(view(signal, axes(data)...))
 
     return (; data=adj_data, kernel=nothing)
 end
+
 end
