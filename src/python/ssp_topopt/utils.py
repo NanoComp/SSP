@@ -10,9 +10,13 @@ to generalize to arbitrary dimensions.
 
 from typing import Union, List, Tuple
 import numpy as np
+from interpax import interp2d
+
 
 # Use jax as our autograd engine
 from jax import numpy as jnp
+from jax import vmap,grad
+import jax
 
 ArrayLikeType = Union[List, Tuple, np.ndarray]
 
@@ -305,6 +309,77 @@ def conic_filter(
     return convolve_design_weights_and_kernel(x, h, periodic_axes)
 
 
+def gradient(x:             np.ndarray,
+             resolution:    float,
+             method:        str = 'cubic2'
+             ):
+      """Compute the spatial gradient of a 2D field via differentiable interpolation.
+
+      Args:
+          x: 2d input array sampled on the design grid.
+          resolution: design-grid resolution.
+          method: interpolation method. See
+              https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
+              for the available methods.
+
+      Returns:
+          A `(Nx, Ny, 2)` array containing the x- and y-derivatives at each grid point.
+      """
+
+      resolution = _get_resolution(resolution)
+      dx         = 1/resolution[0]
+      dy         = 1/resolution[1]
+      Nx,Ny      = x.shape
+      Lx         = dx*(Nx-1)
+      Ly         = dy*(Ny-1)
+      x_coords   = jnp.linspace(-Lx/2, Lx/2, Nx, endpoint = True)
+      y_coords   = jnp.linspace(-Ly/2, Ly/2, Ny, endpoint = True)
+   
+      interpolator = lambda p: interp2d(*p,x_coords,y_coords, x,method=method)
+
+      Xf, Yf = jnp.meshgrid(x_coords, y_coords, indexing="ij")
+      points = jnp.stack((Xf.ravel(),Yf.ravel()), axis=-1)
+
+      return vmap(grad(interpolator))(points).reshape((Nx,Ny,2))
+
+
+def hessian(x:             np.ndarray,
+             resolution:    float,
+             method:        str = 'cubic2'
+             ):
+      """Compute the spatial Hessian of a 2D field via differentiable interpolation.
+
+      Args:
+          x: 2d input array sampled on the design grid.
+          resolution: design-grid resolution.
+          method: interpolation method. See
+              https://interpax.readthedocs.io/en/latest/_api/interpax.interp2d.html#interpax.interp2d
+              for the available methods.
+
+      Returns:
+          A `(Nx, Ny, 2, 2)` array containing the second derivatives at each grid point.
+      """
+
+      resolution = _get_resolution(resolution)
+      dx         = 1/resolution[0]
+      dy         = 1/resolution[1]
+      Nx,Ny      = x.shape
+      Lx         = dx*(Nx-1)
+      Ly         = dy*(Ny-1)
+      x_coords   = jnp.linspace(-Lx/2, Lx/2, Nx, endpoint = True)
+      y_coords   = jnp.linspace(-Ly/2, Ly/2, Ny, endpoint = True)
+   
+      interpolator = lambda p: interp2d(*p,x_coords,y_coords, x,method=method)
+
+      Xf, Yf = jnp.meshgrid(x_coords, y_coords, indexing="ij")
+      points = jnp.stack((Xf.ravel(),Yf.ravel()), axis=-1)
+
+      return vmap(jax.hessian(interpolator))(points).reshape((Nx,Ny,2,2))
+
+
+
+
+
 def tanh_projection(x: np.ndarray, beta: float, eta: float) -> np.ndarray:
     """Sigmoid projection filter.
 
@@ -321,6 +396,11 @@ def tanh_projection(x: np.ndarray, beta: float, eta: float) -> np.ndarray:
     Returns:
         The filtered design weights.
     """
+
+    if beta == 0:
+        # No projection
+        return x
+
     if beta == jnp.inf:
         # Note that backpropagating through here can produce NaNs. So we
         # manually specify the step function to keep the gradient clean.
