@@ -4,7 +4,7 @@ using .Kernel: conickernel
 using .Pad: FillPadding, BoundaryPadding, Inner, PaddingProblem, DefaultPaddingAlgorithm
 using .Convolve: DiscreteConvolutionProblem, FFTConvolution
 using .Project: ProjectionProblem, SSP2
-using .Constrain: LengthConstraintProblem, GeometricConstraints, Solid, Void
+using .Constrain: LengthConstraintProblem, GeometricConstraints, solid, void
 
 
 using Random
@@ -88,28 +88,18 @@ let
     save("design.png", fig)
 end
 
-solidconstraintprob = LengthConstraintProblem(;
-    data_smooth = filtered_design_vars,
+constraintprob = LengthConstraintProblem(;
+    rho_filtered = filtered_design_vars,
     grid = grid,
-    data_binary = projected_design_vars,
+    rho_projected = projected_design_vars,
     target_points,
-    kind = Solid(),
+    material = void,
+    target_length = radius,
 )
-constraintalg = GeometricConstraints(; target_length=radius)
-solidconstraintsolver = init(solidconstraintprob, constraintalg)
-solidconstraintsol = solve!(solidconstraintsolver)
-@show solidconstraintsol # adjoint_solve!(constraint_solver, 1.0, constraintsol.tape)
-
-voidconstraintprob = LengthConstraintProblem(;
-    data_smooth = filtered_design_vars,
-    grid = grid,
-    data_binary = projected_design_vars,
-    target_points,
-    kind = Void(),
-)
-voidconstraintsolver = init(voidconstraintprob, constraintalg)
-voidconstraintsol = solve!(voidconstraintsolver)
-@show voidconstraintsol # adjoint_solve!(constraint_solver, 1.0, constraintsol.tape)
+constraintalg = GeometricConstraints()
+constraintsolver = init(constraintprob, constraintalg)
+constraintsol = solve!(constraintsolver)
+@show constraintsol # adjoint_solve!(constraint_solver, 1.0, constraintsol.tape)
 
 function fom(data, grid)
     return sum(abs2, data) * prod(step, grid)
@@ -124,14 +114,15 @@ function adjoint_fom!(adj_data, adj_fom, data, grid)
     return adj_data
 end
 
-adj_projsol = adjoint_fom(1.0, projected_design_vars, grid)
+adj_rho_projected = adjoint_fom(1.0, projected_design_vars, grid)
 
+adj_projsol = (; value=adj_rho_projected)
 adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-adj_depadsol = adj_projprob.rho_filtered
+adj_depadsol = (; value=adj_projprob.rho_filtered)
 adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
-adj_convsol = adj_depadprob.data
+adj_convsol = (; value=adj_depadprob.data)
 adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
-adj_padsol = adj_convprob.data
+adj_padsol = (; value=adj_convprob.data)
 adj_padprob = adjoint_solve!(padsolver, adj_padsol, padsol.tape)
 adj_design_vars = adj_padprob.data
 
@@ -147,7 +138,7 @@ let
     save("design_gradient.png", fig)
 end
 
-fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver, adj_projsol=adj_projsol
+fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, depadsolver=depadsolver, projsolver=projsolver, adj_rho_projected=adj_rho_projected
     function (design_vars)
 
         padsolver.data = design_vars
@@ -160,14 +151,15 @@ fom_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsolver, de
         projsol = solve!(projsolver)
 
         _fom = fom(projsol.value, grid)
-        adjoint_fom!(adj_projsol, 1.0, projsol.value, grid)
+        adjoint_fom!(adj_rho_projected, 1.0, projsol.value, grid)
 
+        adj_projsol = (; value=adj_rho_projected)
         adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-        adj_depadsol = adj_projprob.rho_filtered
+        adj_depadsol = (; value=adj_projprob.rho_filtered)
         adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
-        adj_convsol = adj_depadprob.data
+        adj_convsol = (; value=adj_depadprob.data)
         adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
-        adj_padsol = adj_convprob.data
+        adj_padsol = (; value=adj_convprob.data)
         adj_padprob = adjoint_solve!(padsolver, adj_padsol, padsol.tape)
         adj_design_vars = adj_padprob.data
         return _fom, adj_design_vars
@@ -185,18 +177,19 @@ constraint_withgradient = let grid=grid, padsolver=padsolver, convsolver=convsol
         depadsol = solve!(depadsolver)
         projsolver.rho_filtered = depadsol.value
         projsol = solve!(projsolver)
-        constraintsolver.data_smooth = depadsol.value
-        constraintsolver.data_binary = projsol.value
+        constraintsolver.rho_filtered = depadsol.value
+        constraintsolver.rho_projected = projsol.value
         constraintsol = solve!(constraintsolver)
 
-        adj_constraintprob = adjoint_solve!(constraintsolver, 1.0, constraintsol.tape)
-        adj_projsol = adj_constraintprob.data_binary
+        adj_constraintsol = (; value=1.0)
+        adj_constraintprob = adjoint_solve!(constraintsolver, adj_constraintsol, constraintsol.tape)
+        adj_projsol = (; value=adj_constraintprob.rho_projected)
         adj_projprob = adjoint_solve!(projsolver, adj_projsol, projsol.tape)
-        adj_depadsol = adj_projprob.rho_filtered + adj_constraintprob.data_smooth
+        adj_depadsol = (; value=adj_projprob.rho_filtered + adj_constraintprob.rho_filtered)
         adj_depadprob = adjoint_solve!(depadsolver, adj_depadsol, depadsol.tape)
-        adj_convsol = adj_depadprob.data
+        adj_convsol = (; value=adj_depadprob.data)
         adj_convprob = adjoint_solve!(convsolver, adj_convsol, convsol.tape)
-        adj_padsol = adj_convprob.data
+        adj_padsol = (; value=adj_convprob.data)
         adj_padprob = adjoint_solve!(padsolver, adj_padsol, padsol.tape)
         adj_design_vars = adj_padprob.data
 
@@ -206,28 +199,25 @@ end
 
 
 
-h = 1e-5
-# h_index = (50, 50)
-h_index = (38, 50)
-perturb = zero(design_vars)
-perturb[h_index...] = h
+h = 1e-6
+Random.seed!(0)
+perturb = h * randn(size(design_vars))
 
 fom_ph, = fom_withgradient(design_vars + perturb)
 fom_mh, = fom_withgradient(design_vars - perturb)
 dfomdh_fd = (fom_ph - fom_mh) / 2h
 
 fom_val, adj_design_vars = fom_withgradient(design_vars)
-
-dfomdh = adj_design_vars[h_index...]
+dfomdh = 2sum(adj_design_vars .* perturb) / 2h
 @show dfomdh_fd dfomdh
 
-constraint_ph, = constraint_withgradient(design_vars + perturb, solidconstraintsolver)
-constraint_mh, = constraint_withgradient(design_vars - perturb, solidconstraintsolver)
+constraint_ph, = constraint_withgradient(design_vars + perturb, constraintsolver)
+constraint_mh, = constraint_withgradient(design_vars - perturb, constraintsolver)
 dconstraintdh_fd = (constraint_ph - constraint_mh) / 2h
 
 # only agrees in the first digit
-_, adj_design_vars_constraint = constraint_withgradient(design_vars, solidconstraintsolver)
-dconstraintdh = adj_design_vars_constraint[h_index...]
+_, adj_design_vars_constraint = constraint_withgradient(design_vars, constraintsolver)
+dconstraintdh = 2sum(adj_design_vars_constraint .* perturb) / 2h
 @show dconstraintdh_fd dconstraintdh
 
 let
@@ -257,11 +247,11 @@ my_objective_fn = let fom_withgradient=fom_withgradient, evaluation_history=eval
 end
 NLopt.max_objective!(opt, my_objective_fn)
 constraint_history = []
-constraint_solvers = (solidconstraintsolver, voidconstraintsolver)
-my_constraint_fn = let constraint_withgradient=constraint_withgradient, constraint_history=constraint_history, design_vars=design_vars, constraint_solvers=constraint_solvers
+my_constraint_fn = let constraint_withgradient=constraint_withgradient, constraint_history=constraint_history, design_vars=design_vars, constraintsolver=constraintsolver
     function (results, x, grad)
-        map!(results, collect(enumerate(constraint_solvers))) do (i, constraint_solver)
-            val, adj_design = constraint_withgradient(reshape(x, size(design_vars)), constraint_solver)
+        map!(results, [(1, void), (2, solid)]) do (i, material)
+            constraintsolver.material = material
+            val, adj_design = constraint_withgradient(reshape(x, size(design_vars)), constraintsolver)
             if !isempty(grad)
                 copy!(view(grad, :, i), vec(adj_design))
             end
@@ -271,9 +261,9 @@ my_constraint_fn = let constraint_withgradient=constraint_withgradient, constrai
         return
     end
 end
-constraint_tols = zeros(length(constraint_solvers))
+constraint_tols = zeros(2) # void & solid
 NLopt.inequality_constraint!(opt, my_constraint_fn, constraint_tols)
-NLopt.maxeval!(opt, 23)
+NLopt.maxeval!(opt, 30)
 fmax, xmax, ret = NLopt.optimize(opt, vec(design_vars))
 
 let
