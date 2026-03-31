@@ -2,6 +2,7 @@ using Test
 using FiniteDifferences
 using DSP
 using SSP
+using Random
 
 Nx = Ny = 10
 grid = (
@@ -24,12 +25,12 @@ sol = SSP.solve(prob, alg)
 @test refconv[map((s, idx) -> s .+ idx, size(kernel) .÷ 2, axes(data))...] ≈ sol.value
 
 # test that adjoints match finite differences
-perturb_index = (3, 7)
-test = let perturb_index=perturb_index, data=copy(data)
-    function (x)
-        data[perturb_index...] = x
+Random.seed!(0)
+perturb = randn(size(data))
+test = let perturb=perturb, data=data
+    function (h)
         prob = SSP.Convolve.DiscreteConvolutionProblem(;
-            data,
+            data = data + h * perturb,
             kernel,
         )
         alg = SSP.Convolve.FFTConvolution()
@@ -37,8 +38,7 @@ test = let perturb_index=perturb_index, data=copy(data)
         return sum(abs2, sol.value)
     end
 end
-xi = 1.0
-dtest_di_fd = central_fdm(5, 1)(test, xi)
+dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
 prob = SSP.Convolve.DiscreteConvolutionProblem(;
     data,
@@ -46,7 +46,7 @@ prob = SSP.Convolve.DiscreteConvolutionProblem(;
 )
 alg = SSP.Convolve.FFTConvolution()
 solver = SSP.init(prob, alg)
-solver.data[perturb_index...] = xi
 sol = SSP.solve!(solver)
-adj_prob = SSP.adjoint_solve!(solver, 2*sol.value, nothing)
-@test dtest_di_fd ≈ adj_prob.data[perturb_index...]
+adj_sol = (; value=2*sol.value)
+adj_prob = SSP.adjoint_solve!(solver, adj_sol, nothing)
+@test dtest_di_fd ≈ sum(adj_prob.data .* perturb)

@@ -3,6 +3,7 @@ using FiniteDifferences
 using Interpolations
 using FastInterpolations: ZeroCurvBC, ZeroSlopeBC
 using SSP
+using Random
 
 Nx = Ny = 10
 grid = (
@@ -39,13 +40,13 @@ sol = SSP.solve(prob, alg)
 
 
 # test that adjoints match finite differences
-perturb_index = (3, 7)
+Random.seed!(0)
+perturb = randn(size(data))
 # interpolation value
-test = let perturb_index=perturb_index, data=copy(data), target_points=target_points, grid=grid
-    function (x)
-        data[perturb_index...] = x
+test = let perturb=perturb, data=copy(data), target_points=target_points, grid=grid
+    function (h)
         prob = SSP.Interpolate.InterpolationProblem(;
-            data,
+            data = data + h * perturb,
             grid,
             target_points,
         )
@@ -54,8 +55,7 @@ test = let perturb_index=perturb_index, data=copy(data), target_points=target_po
         return sum(abs2, sol.value)
     end
 end
-xi = 1.0
-dtest_di_fd = central_fdm(5, 1)(test, xi)
+dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
 prob = SSP.Interpolate.InterpolationProblem(;
     data,
@@ -64,17 +64,15 @@ prob = SSP.Interpolate.InterpolationProblem(;
 )
 alg = SSP.Interpolate.CubicInterp(; deriv=SSP.Interpolate.Value())
 solver = SSP.init(prob, alg)
-solver.data[perturb_index...] = xi
 sol = SSP.solve!(solver)
 adj_prob = SSP.adjoint_solve!(solver, (; value=2*sol.value), nothing)
-@test dtest_di_fd ≈ adj_prob.data[perturb_index...]
+@test dtest_di_fd ≈ sum(adj_prob.data .* perturb)
 
 # interpolation gradienttest = let perturb_index=perturb_index, data=copy(data), target_points=target_points
-test = let perturb_index=perturb_index, data=copy(data), target_points=target_points, grid=grid
-    function (x)
-        data[perturb_index...] = x
+test = let perturb=perturb, data=copy(data), target_points=target_points, grid=grid
+    function (h)
         prob = SSP.Interpolate.InterpolationProblem(;
-            data,
+            data = data + h * perturb,
             grid,
             target_points,
         )
@@ -83,8 +81,7 @@ test = let perturb_index=perturb_index, data=copy(data), target_points=target_po
         return sum(abs2, sol.gradient)
     end
 end
-xi = 1.0
-dtest_di_fd = central_fdm(5, 1)(test, xi)
+dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
 prob = SSP.Interpolate.InterpolationProblem(;
     data,
@@ -93,17 +90,15 @@ prob = SSP.Interpolate.InterpolationProblem(;
 )
 alg = SSP.Interpolate.CubicInterp(; deriv=SSP.Interpolate.ValueWithGradient())
 solver = SSP.init(prob, alg)
-solver.data[perturb_index...] = xi
 sol = SSP.solve!(solver)
 adj_prob = SSP.adjoint_solve!(solver, (; value=0*sol.value, gradient=2*sol.gradient), nothing)
-@test dtest_di_fd ≈ adj_prob.data[perturb_index...]
+@test dtest_di_fd ≈ sum(adj_prob.data .* perturb)
 
 # interpolation hessian
-test = let perturb_index=perturb_index, data=copy(data), target_points=target_points, grid=grid
-    function (x)
-        data[perturb_index...] = x
+test = let perturb=perturb, data=copy(data), target_points=target_points, grid=grid
+    function (h)
         prob = SSP.Interpolate.InterpolationProblem(;
-            data,
+            data = data + h * perturb,
             grid,
             target_points,
         )
@@ -112,8 +107,7 @@ test = let perturb_index=perturb_index, data=copy(data), target_points=target_po
         return sum(abs2, sol.hessian)
     end
 end
-xi = 1.0
-dtest_di_fd = central_fdm(5, 1)(test, xi)
+dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
 prob = SSP.Interpolate.InterpolationProblem(;
     data,
@@ -122,7 +116,6 @@ prob = SSP.Interpolate.InterpolationProblem(;
 )
 alg = SSP.Interpolate.CubicInterp(; deriv=SSP.Interpolate.ValueWithGradientAndHessian())
 solver = SSP.init(prob, alg)
-solver.data[perturb_index...] = xi
 sol = SSP.solve!(solver)
 adj_prob = SSP.adjoint_solve!(solver, (; value=0*sol.value, gradient=0*sol.gradient, hessian=2*sol.hessian), nothing)
-@test dtest_di_fd ≈ adj_prob.data[perturb_index...]
+@test dtest_di_fd ≈ sum(adj_prob.data .* perturb)

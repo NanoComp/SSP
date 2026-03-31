@@ -215,7 +215,7 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
     dx = first(dx_all)
     R_smoothing = alg.smoothing_radius * dx
 
-    for (i, adj_proj, rho_f) in zip(eachindex(adj_rho_filtered_interp.value), adj_sol, rho_filtered_interp.value)
+    for (i, adj_proj, rho_f) in zip(eachindex(adj_rho_filtered_interp.value), adj_sol.value, rho_filtered_interp.value)
         # the calculation of the norm is not local in memory, but this is
         # because the interpolation is done as SoA whereas here we use AoS
         rho_filtered_interp_derivs = (;

@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssp-topopt"
+version = "0.1.0"
+description = "Smoothed subpixel projection (SSP) for topology optimization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "SSP Contributors" }
+]
+keywords = ["topology-optimization", "photonic-design", "jax", "projection"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  "numpy>=1.24",
+  "jax>=0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/NanoComp/SSP"
+Repository = "https://github.com/NanoComp/SSP"
+Issues = "https://github.com/NanoComp/SSP/issues"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+  "nlopt>=2.8",
+]
+examples = [
+  "matplotlib>=3.8",
+  "nlopt>=2.8",
+]
+dev = [
+  "build>=1.2",
+  "twine>=6",
+  "pytest>=8",
+  "matplotlib>=3.8",
+  "nlopt>=2.8",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src/python"]
+include = ["ssp_topopt*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]

@@ -1,7 +1,7 @@
 using Test
 using FiniteDifferences
 using SSP
-
+using Random
 
 Nx = Ny = 10
 grid = (
@@ -23,12 +23,12 @@ for alg in (
 )
 
     # test that adjoints match finite differences
-    perturb_index = (3, 7)
-    test = let perturb_index=perturb_index, data=copy(data), alg=alg, grid=grid, target_points=target_points
-        function (x)
-            data[perturb_index...] = x
+    Random.seed!(0)
+    perturb = randn(size(data))
+    test = let perturb=perturb, data=copy(data), alg=alg, grid=grid, target_points=target_points
+        function (h)
             prob = SSP.Project.ProjectionProblem(;
-                rho_filtered=data,
+                rho_filtered=data + h * perturb,
                 grid,
                 target_points,
                 beta = Inf,
@@ -38,8 +38,7 @@ for alg in (
             return sum(abs2, sol.value)
         end
     end
-    xi = 1.0
-    dtest_di_fd = central_fdm(5, 1)(test, xi)
+    dtest_di_fd = central_fdm(5, 1)(test, 0.0)
 
     prob = SSP.Project.ProjectionProblem(;
         rho_filtered=data,
@@ -49,8 +48,8 @@ for alg in (
         eta = 0.5
     )
     solver = SSP.init(prob, alg)
-    solver.rho_filtered[perturb_index...] = xi
     sol = SSP.solve!(solver)
-    adj_prob = SSP.adjoint_solve!(solver, 2*sol.value, nothing)
-    @test dtest_di_fd ≈ adj_prob.rho_filtered[perturb_index...]
+    adj_sol = (; value=2*sol.value)
+    adj_prob = SSP.adjoint_solve!(solver, adj_sol, nothing)
+    @test dtest_di_fd ≈ sum(adj_prob.rho_filtered .* perturb)
 end

@@ -3,7 +3,7 @@ using ImageFiltering
 using FiniteDifferences
 using SSP
 using Zygote
-
+using Random
 
 Nx = Ny = 10
 grid = (
@@ -20,23 +20,20 @@ myfilt = SSP.conic_filter(data, radius, grid)
 @test reffilt ≈ myfilt
 
 # test that adjoints match finite differences for filtering
-perturb_index = (3, 7)
+Random.seed!(0)
+perturb = randn(size(data))
 test = let radius=radius, grid=grid
     function (data)
         rho_filtered = SSP.conic_filter(data, radius, grid)
         return sum(abs2, rho_filtered)
     end
 end
-test_i = let perturb_index=perturb_index, data=copy(data), test=test
-    function (x)
-        data[perturb_index...] = x
-        return test(data)
-    end
+test_i = let perturb=perturb, data=copy(data), test=test
+    h -> test(data + h * perturb)
 end
-xi = 1.0
-dtest_di_fd = central_fdm(5, 1)(test_i, xi)
-ddata, = Zygote.gradient(test, let data=copy(data); data[perturb_index...] = xi; data; end)
-@test dtest_di_fd ≈ ddata[perturb_index...]
+dtest_di_fd = central_fdm(5, 1)(test_i, 0.0)
+ddata, = Zygote.gradient(test, data)
+@test dtest_di_fd ≈ sum(ddata .* perturb)
 
 # test that adjoints match finite differences for projection
 ssp_algs = (
@@ -53,14 +50,11 @@ for ssp in ssp_algs
             return sum(abs2, rho_projected)
         end
     end
-    test_ssp_i = let perturb_index=perturb_index, data=copy(myfilt), test_ssp=test_ssp
-        function (x)
-            data[perturb_index...] = x
-            return test_ssp(data)
-        end
+    test_ssp_i = let perturb=perturb, data=copy(myfilt), test_ssp=test_ssp
+        h -> test_ssp(data + h * perturb)
     end
 
-    dtest_ssp_di_fd = central_fdm(5, 1)(test_ssp_i, xi)
-    ddata_ssp, = Zygote.gradient(test_ssp, let data=copy(myfilt); data[perturb_index...] = xi; data; end)
-    @test dtest_ssp_di_fd ≈ ddata_ssp[perturb_index...]
+    dtest_ssp_di_fd = central_fdm(5, 1)(test_ssp_i, 0.0)
+    ddata_ssp, = Zygote.gradient(test_ssp, myfilt)
+    @test dtest_ssp_di_fd ≈ sum(ddata_ssp .* perturb)
 end
