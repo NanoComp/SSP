@@ -17,6 +17,6 @@ include("constrain.jl")
 public Constrain
 
 include("pythonic_api.jl")
-public conic_filter, ssp1_linear, ssp1, ssp2
+public conic_filter, ssp1_linear, ssp1, ssp2, constraint_solid, constraint_void
 
 end
