@@ -85,7 +85,7 @@ function conv_solve!(solver, ::FFTConvolution)
     copy!(view(signal, axes(data)...), data)
     mul!(fftconv, plan_fw, signal)
 
-    fftconv .*= fftkernel ./ prod(fftsize)
+    fftconv .*= fftkernel .* inv(prod(fftsize))
 
     mul!(conv, plan_bk, fftconv)
 
