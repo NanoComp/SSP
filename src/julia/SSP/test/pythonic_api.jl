@@ -58,3 +58,24 @@ for ssp in ssp_algs
     ddata_ssp, = Zygote.gradient(test_ssp, myfilt)
     @test dtest_ssp_di_fd ≈ sum(ddata_ssp .* perturb)
 end
+
+constraint_algs = (
+    SSP.constraint_solid,
+    SSP.constraint_void,
+)
+for constraint in constraint_algs
+    test_constraint = let radius=radius, grid=grid, beta=beta, eta=eta
+        function (data)
+            rho_filtered = SSP.conic_filter(data, radius, grid)
+            rho_projected = SSP.ssp2(data, beta, eta, grid)
+            return constraint(rho_filtered, rho_projected, grid, radius)
+        end
+    end
+    test_constraint_i = let perturb=perturb, data=data, test_constraint=test_constraint
+        h -> test_constraint(data + h * perturb)
+    end
+
+    dtest_constraint_di_fd = central_fdm(5, 1)(test_constraint_i, 0.0)
+    ddata_constraint, = Zygote.gradient(test_constraint, data)
+    @test dtest_constraint_di_fd ≈ sum(ddata_constraint .* perturb) rtol=1e-5
+end
