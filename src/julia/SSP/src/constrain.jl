@@ -10,6 +10,26 @@ public LengthConstraintProblem, GeometricConstraints, solid, void
     void
 end
 
+"""
+    solid
+
+A material represented where `rho_projected` takes a value of 1.
+"""
+solid
+
+"""
+    void
+
+A material represented where `rho_projected` takes a value of 0.
+"""
+void
+
+"""
+    LengthConstraintProblem(; rho_filtered, grid, rho_projected, target_points, material, target_length, conic_radius=target_length)
+
+Define a problem for calculating a length scale constraint to assess if a design of a `material` represented by a smooth density `rho_filtered` on a `grid` and a binary density `rho_projected` at `target_points` contains features that violate the minimum `target_length`.
+By default, it is assumed that `rho_filtered` is obtained from a convolution with a conic filter whose `conic_radius` equals the `target_length`.
+"""
 Base.@kwdef struct LengthConstraintProblem{D,G,DB,T,L}
     rho_filtered::D
     grid::G
@@ -46,6 +66,12 @@ mutable struct LengthConstraintSolver{D,G,DB,T,L,A,C}
     
 end
 
+"""
+    GeometricConstraints(; constraint_threshold=1e-8)
+
+Perform a calculation of a length scale constraint function as a product of a material indicator function based on values of `rho_projected` and an extremal region function based on interpolation of `rho_filtered`.
+The `constraint_threshold` parameter may be tuned if feasible designs still don't meet the target length scale.
+"""
 Base.@kwdef struct GeometricConstraints{S}
     constraint_threshold::S=1e-8
 end
