@@ -60,10 +60,10 @@ for ssp in ssp_algs
 end
 
 constraint_algs = (
-    SSP.constraint_solid,
-    SSP.constraint_void,
+    (SSP.constraint_solid, SSP.constraint_void),
+    (SSP.constraint_void, SSP.constraint_solid),
 )
-for constraint in constraint_algs
+for (constraint, constraint_dual) in constraint_algs
     test_constraint = let radius=radius, grid=grid, beta=beta, eta=eta
         function (data)
             rho_filtered = SSP.conic_filter(data, radius, grid)
@@ -78,4 +78,16 @@ for constraint in constraint_algs
     dtest_constraint_di_fd = central_fdm(5, 1)(test_constraint_i, 0.0)
     ddata_constraint, = Zygote.gradient(test_constraint, data)
     @test dtest_constraint_di_fd ≈ sum(ddata_constraint .* perturb) rtol=1e-5
+
+    # check duality
+    test_constraint_dual = let radius=radius, grid=grid, beta=beta, eta=eta
+        function (data)
+            rho_filtered = SSP.conic_filter(data, radius, grid)
+            rho_projected = SSP.ssp2(data, beta, eta, grid)
+            return constraint_dual(rho_filtered, rho_projected, grid, radius)
+        end
+    end
+    val_constraint = test_constraint(data)
+    val_constraint_dual = test_constraint_dual(1 .- data)
+    @test val_constraint ≈ val_constraint_dual rtol=1e-5
 end
