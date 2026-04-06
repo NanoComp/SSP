@@ -3,7 +3,7 @@
 
 Replicates Fig. 1 from [1].
 
-[1]: G. Romano, R. Arrieta, and S. G. Johnson, [“Differentiating through binarized topology changes: Second-order subpixel-smoothed projection,”](http://arxiv.org/abs/2601.10737) arXiv.org e-Print archive, 2601.10737, January 2026.
+[1]: R. Arrieta, G. Romano, and S. G. Johnson, [“Hyperparameter-free minimum-lengthscale constraints for topology optimization,”](http://arxiv.org/abs/2507.16108) arXiv.org e-Print archive, 2507.16108, July 2025.
 """
 
 using SSP: conic_filter, ssp2, constraint_void, constraint_solid
