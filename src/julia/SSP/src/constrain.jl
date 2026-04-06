@@ -66,14 +66,18 @@ mutable struct LengthConstraintSolver{D,G,DB,T,L,A,C}
     
 end
 
+const GeometricConstraints_default_constraint_threshold = 1e-8
+const GeometricConstraints_default_constraint_decayrate = 64.0
+
 """
-    GeometricConstraints(; constraint_threshold=1e-8)
+    GeometricConstraints(; constraint_threshold=1e-8, constraint_decayrate=64.0)
 
 Perform a calculation of a length scale constraint function as a product of a material indicator function based on values of `rho_projected` and an extremal region function based on interpolation of `rho_filtered`.
 The `constraint_threshold` parameter may be tuned if feasible designs still don't meet the target length scale.
 """
 Base.@kwdef struct GeometricConstraints{S}
-    constraint_threshold::S=1e-8
+    constraint_threshold::S=GeometricConstraints_default_constraint_threshold
+    constraint_decayrate::S=GeometricConstraints_default_constraint_decayrate
 end
 
 function init!(prob::LengthConstraintProblem, alg::GeometricConstraints)
@@ -129,7 +133,7 @@ function constrain_solve!(solver, alg::GeometricConstraints)
     (; rho_filtered, rho_projected, target_points, material, target_length, conic_radius, cacheval) = solver
     (; interp_solver) = cacheval
 
-    c = 64 * conic_radius^2
+    c = alg.constraint_decayrate * conic_radius^2
     eta_m = materialthreshold(material, target_length/conic_radius)
 
     interp_solver.data = rho_filtered
@@ -171,7 +175,7 @@ function adjoint_constrain_solve!(solver, alg, adj_sol, tape)
     (; rho_filtered, grid, rho_projected, target_points, material, target_length, conic_radius, cacheval) = solver
     (; interp_solver, adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_projected) = cacheval
 
-    c = 64 * conic_radius^2
+    c = alg.constraint_decayrate * conic_radius^2
     eta_m = materialthreshold(material, target_length/conic_radius)
 
     # We do not keep a tape and need to repeat the forward calculation

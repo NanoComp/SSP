@@ -112,7 +112,8 @@ function ssp_rrule(adj_rho_projected, solver)
     return adj_prob.rho_filtered
 end
 
-function lengthconstraint_withsolver(material, rho_filtered, rho_projected, grid, target_length)
+function lengthconstraint_withsolver(material, rho_filtered, rho_projected, grid, target_length, conic_radius=target_length;
+                                     constraint_threshold=Constrain.GeometricConstraints_default_constraint_threshold)
     target_points = vec(collect(Iterators.product(grid...)))
     prob = Constrain.LengthConstraintProblem(;
         rho_filtered,
@@ -121,8 +122,9 @@ function lengthconstraint_withsolver(material, rho_filtered, rho_projected, grid
         target_points,
         material,
         target_length,
+        conic_radius
     )
-    alg = Constrain.GeometricConstraints()
+    alg = Constrain.GeometricConstraints(; constraint_threshold)
     solver = init(prob, alg)
     sol = solve!(solver)
     return sol.value, solver
