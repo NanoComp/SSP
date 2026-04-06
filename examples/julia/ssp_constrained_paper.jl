@@ -44,7 +44,7 @@ function get_honey(w, target_length)
     design_vars = [Float64(abs(y - 0.5) ≤ w/2) for (x, y) in Iterators.product(grid...)]
     rho_filtered = conic_filter(design_vars, conic_radius, grid)
     rho_projected = ssp2(rho_filtered, beta, eta, grid)
-    gs = constraint_solid(rho_filtered, rho_projected, grid, target_length, conic_radius)
+    gs = constraint_solid(rho_filtered, rho_projected, grid, target_length, conic_radius; constraint_threshold)
     # 'constraint_solid' returns (g-ϵ)/ϵ but we want g
     gs = gs*constraint_threshold + constraint_threshold  # de-normalize constraint value
     return gs
