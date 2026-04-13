@@ -78,14 +78,14 @@ The `constraint_threshold` parameter may be tuned if feasible designs still don'
 Base.@kwdef struct GeometricConstraints{S}
     constraint_threshold::S=GeometricConstraints_default_constraint_threshold
     constraint_decayrate::S=GeometricConstraints_default_constraint_decayrate
+    interp = CubicInterp(; deriv=ValueWithGradient())
 end
 
 function init!(prob::LengthConstraintProblem, alg::GeometricConstraints)
     (; rho_filtered, grid, rho_projected, target_points, material, target_length, conic_radius) = prob
     
     interp_prob = InterpolationProblem(; data=rho_filtered, grid, target_points)
-    interp_alg = CubicInterp(; deriv=ValueWithGradient())
-    interp_solver = init!(interp_prob, interp_alg)
+    interp_solver = init!(interp_prob, alg.interp)
     interp_sol = solve!(interp_solver)
 
     adj_rho_filtered_value = similar(interp_sol.value)
