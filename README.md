@@ -17,7 +17,7 @@ pip install ssp-topopt
 The Python import package is `ssp_topopt`:
 
 ```python
-from ssp_topopt import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear
+from ssp_topopt import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear,ssp2
 ```
 
 For local development:
