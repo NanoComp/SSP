@@ -6,4 +6,5 @@ using Test
 @testset "convolve" include("convolve.jl")
 @testset "interpolate" include("interpolate.jl")
 @testset "project" include("project.jl")
+@testset "constrain" include("constrain.jl")
 @testset "pythonic_api" include("pythonic_api.jl")

@@ -8,6 +8,7 @@ Supports N-dimensional data and reverse-mode automatic differentiation with mini
 This package provides a high-level API nearly identical to its python cousin.
 It provides a `conic_filter` routine for smoothing design variables as well as
 three projections: `ssp1_linear`, `ssp1`, and `ssp2`.
+We also provide length scale constraint functions `constraint_solid` and `constraint_void`.
 
 ### Example
 
@@ -54,6 +55,8 @@ fom = let mapping=mapping
 end
 Zygote.withgradient(fom, design_vars)
 ```
+
+For usage of the constraint functions, see `SSP/examples/julia/ssp_constrained.jl`.
 
 ### Low-level API
 

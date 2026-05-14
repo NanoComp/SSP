@@ -135,7 +135,6 @@ function interp_solve!(solver, alg::InterpolationAlgorithm)
     sol_value = if alg.deriv isa Value || alg.deriv isa ValueWithGradient || alg.deriv isa ValueWithGradientAndHessian
         let (; interp_value) = cacheval
             interp!(interp_value, alg, grid, data, target_points)
-            cubic_interp!(interp_value, grid, data, target_points)
             (; value=interp_value)
         end
     else

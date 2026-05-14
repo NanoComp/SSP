@@ -111,3 +111,49 @@ function ssp_rrule(adj_rho_projected, solver)
     adj_prob = adjoint_solve!(solver, adj_sol, nothing)
     return adj_prob.rho_filtered
 end
+
+function lengthconstraint_withsolver(material, rho_filtered, rho_projected, grid, target_length, conic_radius=target_length;
+                                     constraint_threshold=Constrain.GeometricConstraints_default_constraint_threshold)
+    target_points = vec(collect(Iterators.product(grid...)))
+    prob = Constrain.LengthConstraintProblem(;
+        rho_filtered,
+        grid,
+        rho_projected,
+        target_points,
+        material,
+        target_length,
+        conic_radius
+    )
+    alg = Constrain.GeometricConstraints(; constraint_threshold)
+    solver = init(prob, alg)
+    sol = solve!(solver)
+    return sol.value, solver
+end
+
+"""
+    constraint_solid(rho_filtered, rho_projected, grid, target_length)
+
+Calculate a solid length-scale constraint function using the [geometric constraint algorithm] [1].
+
+This technique takes smoothed data, e.g. from filtering, `rho_filtered` and binary data, e.g. from projection, `rho_projected` both defined on the same `grid` and calculates whether features in the solid region, i.e. where `rho_projected` takes values of 1, violate the minimum `target_length`.
+
+[1]: R. Arrieta, G. Romano, and S. G. Johnson, [“Hyperparameter-free minimum-lengthscale constraints for topology optimization,”](http://arxiv.org/abs/2507.16108) arXiv.org e-Print archive, 2507.16108, July 2025.
+"""
+constraint_solid(args...; kws...) = lengthconstraint_withsolver(Constrain.solid, args...; kws...)[1]
+
+"""
+    constraint_void(rho_filtered, rho_projected, grid, target_length)
+
+Calculate a void length-scale constraint function using the [geometric constraint algorithm] [1].
+
+This technique takes smoothed data, e.g. from filtering, `rho_filtered` and binary data, e.g. from projection, `rho_projected` both defined on the same `grid` and calculates whether features in the void region, i.e. where `rho_projected` takes values of 0, violate the minimum `target_length`.
+
+[1]: R. Arrieta, G. Romano, and S. G. Johnson, [“Hyperparameter-free minimum-lengthscale constraints for topology optimization,”](http://arxiv.org/abs/2507.16108) arXiv.org e-Print archive, 2507.16108, July 2025.
+"""
+constraint_void(args...; kws...) = lengthconstraint_withsolver(Constrain.void, args...; kws...)[1]
+
+function lengthconstraint_rrule(adj_constraint, solver)
+    adj_sol = (; value=adj_constraint)
+    adj_prob = adjoint_solve!(solver, adj_sol, nothing)
+    return adj_prob
+end
