@@ -47,7 +47,7 @@ function conic_filter_rrule(adj_depad_value, padsolver, convsolver, depadsolver)
     return adj_padprob.data
 end
 
-function ssp_withsolver(alg, rho_filtered, beta, eta, grid)
+function ssp_withsolver(alg, rho_filtered, beta, eta, grid, dilation_distance=0)
     target_points = vec(collect(Iterators.product(grid...)))
     prob = Project.ProjectionProblem(;
         rho_filtered,
@@ -55,6 +55,7 @@ function ssp_withsolver(alg, rho_filtered, beta, eta, grid)
         target_points,
         beta,
         eta,
+        dilation_distance,
     )
     solver = init(prob, alg)
     sol = solve!(solver)
@@ -62,7 +63,7 @@ function ssp_withsolver(alg, rho_filtered, beta, eta, grid)
 end
 
 """
-    ssp1_linear(rho_filtered, beta, eta, grid)
+    ssp1_linear(rho_filtered, beta, eta, grid, [dilation_distance=0])
 
 Project using the original [SSP1 algorithm] [1] with linear interpolation.
 
@@ -77,7 +78,7 @@ At `beta=Inf`, this projection is not differentiable through topology changes, a
 ssp1_linear(args...; kws...) = ssp_withsolver(Project.SSP1_linear(; kws...), args...)[1]
 
 """
-    ssp1(rho_filtered, beta, eta, grid)
+    ssp1(rho_filtered, beta, eta, grid, [dilation_distance=0])
 
 Project using the original [SSP1 algorithm] [1] with cubic interpolation.
 
@@ -92,7 +93,7 @@ At `beta=Inf`, this projection is not differentiable through topology changes, a
 ssp1(args...; kws...) = ssp_withsolver(Project.SSP1(; kws...), args...)[1]
 
 """
-    ssp2(rho_filtered, beta, eta, grid)
+    ssp2(rho_filtered, beta, eta, grid, [dilation_distance=0])
 
 Project using the improved [SSP2 algorithm] [1] with cubic interpolation.
 
