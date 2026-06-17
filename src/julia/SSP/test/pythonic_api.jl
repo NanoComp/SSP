@@ -57,6 +57,22 @@ for ssp in ssp_algs
     dtest_ssp_di_fd = central_fdm(5, 1)(test_ssp_i, 0.0)
     ddata_ssp, = Zygote.gradient(test_ssp, myfilt)
     @test dtest_ssp_di_fd ≈ sum(ddata_ssp .* perturb)
+
+    dilation = 0.2
+    test_ssp = let radius=radius, grid=grid, ssp=ssp, beta=beta, eta=eta
+        function (data)
+            rho_projected = ssp(data, beta, eta, grid, dilation)
+            return sum(abs2, rho_projected)
+        end
+    end
+    test_ssp_i = let perturb=perturb, data=copy(myfilt), test_ssp=test_ssp
+        h -> test_ssp(data + h * perturb)
+    end
+
+    dtest_ssp_di_fd = central_fdm(5, 1)(test_ssp_i, 0.0)
+    ddata_ssp, = Zygote.gradient(test_ssp, myfilt)
+    @test dtest_ssp_di_fd ≈ sum(ddata_ssp .* perturb)
+
 end
 
 constraint_algs = (

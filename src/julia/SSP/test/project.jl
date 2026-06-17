@@ -20,17 +20,18 @@ for alg in (
     SSP.Project.SSP1_linear(),
     SSP.Project.SSP1(),
     SSP.Project.SSP2(),
-)
+), dilation in [-0.3, 0.0, 0.3]
 
     # test that adjoints match finite differences
     Random.seed!(0)
     perturb = randn(size(data))
-    test = let perturb=perturb, data=copy(data), alg=alg, grid=grid, target_points=target_points
+    test = let perturb=perturb, data=copy(data), alg=alg, grid=grid, target_points=target_points, dilation=dilation
         function (h)
             prob = SSP.Project.ProjectionProblem(;
                 rho_filtered=data + h * perturb,
                 grid,
                 target_points,
+                dilation_distance = dilation,
                 beta = Inf,
                 eta = 0.5
             )
@@ -44,6 +45,7 @@ for alg in (
         rho_filtered=data,
         grid,
         target_points,
+        dilation_distance = dilation,
         beta = Inf,
         eta = 0.5
     )

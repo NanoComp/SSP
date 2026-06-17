@@ -31,6 +31,24 @@ function rrule(::typeof(ssp2), rho_filtered, beta, eta, grid; kws...)
     _ssp_rrule(Project.SSP2(; kws...), rho_filtered, beta, eta, grid)
 end
 
+function _ssp_rrule(alg, rho_filtered, beta, eta, grid, dilation_distance)
+    rho_projected, solver = ssp_withsolver(alg, rho_filtered, beta, eta, grid, dilation_distance)
+    function ssp_pullback(adj_rho_projected)
+        adj_rho_filtered = ssp_rrule(unthunk(adj_rho_projected), solver)
+        return NoTangent(), adj_rho_filtered, NoTangent(), NoTangent(), NoTangent(), NoTangent()
+    end
+    return rho_projected, ssp_pullback
+end
+function rrule(::typeof(ssp1_linear), rho_filtered, beta, eta, grid, dilation_distance; kws...)
+    _ssp_rrule(Project.SSP1_linear(; kws...), rho_filtered, beta, eta, grid, dilation_distance)
+end
+function rrule(::typeof(ssp1), rho_filtered, beta, eta, grid, dilation_distance; kws...)
+    _ssp_rrule(Project.SSP1(; kws...), rho_filtered, beta, eta, grid, dilation_distance)
+end
+function rrule(::typeof(ssp2), rho_filtered, beta, eta, grid, dilation_distance; kws...)
+    _ssp_rrule(Project.SSP2(; kws...), rho_filtered, beta, eta, grid, dilation_distance)
+end
+
 function _lengthconstraint_rrule(material, rho_filtered, rho_projected, grid, target_length)
     constraint, solver = lengthconstraint_withsolver(material, rho_filtered, rho_projected, grid, target_length)
     function lengthconstraint_pullback(adj_constraint)

@@ -10,9 +10,8 @@ public ProjectionProblem, SSP1_linear, SSP1, SSP2
 
 Define a problem for projecting smoothed data `rho_filtered` defined on a `grid`, i.e. a tuple of range, at a list of selected `target_points`, i.e. a vector of coordinate tuples.
 The projection pushes `rho` values above `eta` towards 1 and `rho` values below `eta` towards 0 with a stiffness parameter `beta`.
-The `dilation_distance` parameter sets how far to expand or contract the contour of the projection threshold.
+The `dilation_distance` parameter sets an approximate length how far to expand or contract the contour of the projection threshold.
 When `dilation_distance` is positive the region above the threshold is dilated and when negative it is eroded.
-Furthermore, `dilation_distance` is dimensionless in units of pixels from the boundary and must satisfy `abs(dilation_distance) < 1`
 """
 Base.@kwdef struct ProjectionProblem{D,G,T,B,DD}
     rho_filtered::D
@@ -167,8 +166,7 @@ function adjoint_tanh_projection(adj_out, x, beta, eta)
 end
 
 
-function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
-    rho_projected = tanh_projection(rho_filtered, beta, eta)
+function smoothed_projection(rho_filtered_no_dilation, rho_filtered_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
 
     den_helper = if haskey(rho_filtered_derivs_normsq, :hessian)
         # SSP2
@@ -181,8 +179,9 @@ function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothi
     nonzero_norm = abs(den_helper) > zero(den_helper)
 
     den_eff = sqrt(ifelse(nonzero_norm, den_helper, oneunit(den_helper)))
+    rho_filtered = rho_filtered_no_dilation + dilation_distance * den_eff
     d = (eta - rho_filtered) / den_eff
-    d_R = d / R_smoothing - dilation_distance
+    d_R = d / R_smoothing
 
     needs_smoothing = nonzero_norm & (abs(d_R) < one(d_R))
     F_plus  = ifelse(needs_smoothing, 1//2 + d_R * evalpoly(d_R^2, (-15//16,  5//8, -3//16)), one(d_R))
@@ -195,7 +194,9 @@ function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothi
     rho_plus_eff_projected  = tanh_projection(rho_filtered_plus,  beta, eta)
 
     rho_projected_smoothed = (1 - F_plus) * rho_minus_eff_projected + F_plus * rho_plus_eff_projected
-    tape = (; F_plus, F_minus, d, d_R, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected)
+    rho_projected = tanh_projection(rho_filtered, beta, eta)
+
+    tape = (; F_plus, F_minus, d, d_R, rho_filtered, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected)
     return ifelse(needs_smoothing, rho_projected_smoothed, rho_projected), tape
 end
 
@@ -228,7 +229,7 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
         )
         rho_filtered_interp_derivs_normsq = map(Base.Fix1(sum, abs2), rho_filtered_interp_derivs)
         rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
-        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta)
+        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
         adj_rho_filtered_interp.value[i] = adj_rho_f
         adj_rho_filtered_interp.gradient[i, :] .= 2adj_rho_derivs_normsq.gradient .* rho_filtered_interp_derivs.gradient
         if haskey(rho_filtered_interp, :hessian)
@@ -241,8 +242,8 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
     return (; rho_filtered=adj_interp_prob.data, grid=nothing, target_points=nothing)
 end
 
-function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho_filtered, rho_filtered_derivs_normsq, R_smoothing, beta, eta)
-    (; F_plus, F_minus, d, d_R, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected) = tape
+function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho_filtered_no_dilation, rho_filtered_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
+    (; F_plus, F_minus, d, d_R, rho_filtered, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected) = tape
 
     adj_rho_projected = ifelse(needs_smoothing, zero(adj_rho_projected_maybe_smoothed), adj_rho_projected_maybe_smoothed)
     adj_rho_filtered  = adjoint_tanh_projection(adj_rho_projected, rho_filtered, beta, eta)
@@ -262,7 +263,9 @@ function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho
     
     adj_d = adj_d_R / R_smoothing
     adj_rho_filtered -= adj_d / den_eff
+    adj_rho_filtered_no_dilation = adj_rho_filtered
     adj_den_eff -= adj_d * d / den_eff
+    adj_den_eff += dilation_distance * adj_rho_filtered
     adj_den_helper = ifelse(nonzero_norm, adj_den_eff, zero(adj_den_eff)) / 2den_eff
 
     adj_rho_filtered_derivs_normsq = (;
@@ -270,6 +273,6 @@ function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho
         (haskey(rho_filtered_derivs_normsq, :hessian) ? (; hessian = adj_den_helper * R_smoothing^2) : (;))...
     )
 
-    return adj_rho_filtered, adj_rho_filtered_derivs_normsq
+    return adj_rho_filtered_no_dilation, adj_rho_filtered_derivs_normsq
 end
 end
