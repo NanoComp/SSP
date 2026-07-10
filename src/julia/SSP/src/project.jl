@@ -176,7 +176,7 @@ function smoothed_projection(rho_filtered_no_dilation, rho_filtered_derivs_norms
         rho_filtered_derivs_normsq.gradient
     end
 
-    nonzero_norm = abs(den_helper) > zero(den_helper)
+    nonzero_norm = !iszero(den_helper)
 
     den_eff = sqrt(ifelse(nonzero_norm, den_helper, oneunit(den_helper)))
     rho_filtered = rho_filtered_no_dilation + dilation_distance * den_eff
