@@ -6,18 +6,20 @@ import SSP: init!, solve!, adjoint_solve!
 public ProjectionProblem, SSP1_linear, SSP1, SSP2
 
 """
-    ProjectionProblem(; rho_filtered, grid, target_points, beta=Inf, eta=1/2)
+    ProjectionProblem(; rho_filtered, grid, target_points, beta=Inf, eta=1/2, dilation_distance=0)
 
 Define a problem for projecting smoothed data `rho_filtered` defined on a `grid`, i.e. a tuple of range, at a list of selected `target_points`, i.e. a vector of coordinate tuples.
-The projection pushes `rho` values above `eta` towards 1 and `rho` values below `eta` towards 0 with a stiffnes parameter `beta`.
+The projection pushes `rho` values above `eta` towards 1 and `rho` values below `eta` towards 0 with a stiffness parameter `beta`.
+The `dilation_distance` parameter sets an approximate length how far to expand or contract the contour of the projection threshold.
+When `dilation_distance` is positive the region above the threshold is dilated and when negative it is eroded.
 """
-Base.@kwdef struct ProjectionProblem{D,G,T,B}
+Base.@kwdef struct ProjectionProblem{D,G,T,B,DD}
     rho_filtered::D
     grid::G
     target_points::T
     beta::B = eltype(rho_filtered)(Inf)
     eta::B = eltype(rho_filtered)(1//2)
-    # dilation/erosion distance = 0
+    dilation_distance::DD=0
 end
 
 function Base.copy(prob::ProjectionProblem)
@@ -27,17 +29,18 @@ function Base.copy(prob::ProjectionProblem)
         target_points = copy(prob.target_points),
         beta = prob.beta,
         eta = prob.eta,
+        dilation_distance = prob.dilation_distance,
     )
     return newprob
 end
 
-mutable struct ProjectionSolver{D,G,T,B,A,C}
+mutable struct ProjectionSolver{D,G,T,B,DD,A,C}
     rho_filtered::D
     const grid::G
     const target_points::T
     beta::B
     eta::B
-    # dilation/erosion distance
+    dilation_distance::DD
     alg::A
     cacheval::C
 end
@@ -72,7 +75,7 @@ The `smoothing_radius` keyword sets the radius of the smoothing kernel relative 
 SSP2(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradientAndHessian()), kws...)
 
 function init!(prob::ProjectionProblem, alg::SSPAlg)
-    (; rho_filtered, grid, target_points, beta, eta) = prob
+    (; rho_filtered, grid, target_points, beta, eta, dilation_distance) = prob
 
     interp_prob = InterpolationProblem(; data=rho_filtered, grid, target_points)
     interp_alg = alg.interp
@@ -90,7 +93,7 @@ function init!(prob::ProjectionProblem, alg::SSPAlg)
 
     cacheval = (; interp_solver, rho_projected, adj_rho_filtered_interp)# adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian)
 
-    return ProjectionSolver(rho_filtered, grid, target_points, beta, eta, alg, cacheval)
+    return ProjectionSolver(rho_filtered, grid, target_points, beta, eta, dilation_distance, alg, cacheval)
 end
 
 function solve!(solver::ProjectionSolver)
@@ -99,7 +102,7 @@ end
 
 function proj_solve!(solver, alg::SSPAlg)
 
-    (; rho_filtered, grid, beta, eta, cacheval) = solver
+    (; rho_filtered, grid, beta, eta, dilation_distance, cacheval) = solver
     (; interp_solver, rho_projected) = cacheval
 
     interp_solver.data = rho_filtered
@@ -118,7 +121,7 @@ function proj_solve!(solver, alg::SSPAlg)
             (haskey(rho_filtered_interp, :hessian) ? (; hessian = view(rho_filtered_interp.hessian, i, :, :)) : (;))...
         )
         rho_filtered_interp_derivs_normsq = map(Base.Fix1(sum, abs2), rho_filtered_interp_derivs)
-        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta)
+        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
         rho_projected[i] = rho_p
     end
     return (; value=rho_projected, tape=nothing)
@@ -163,8 +166,7 @@ function adjoint_tanh_projection(adj_out, x, beta, eta)
 end
 
 
-function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothing, beta, eta)
-    rho_projected = tanh_projection(rho_filtered, beta, eta)
+function smoothed_projection(rho_filtered_no_dilation, rho_filtered_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
 
     den_helper = if haskey(rho_filtered_derivs_normsq, :hessian)
         # SSP2
@@ -174,9 +176,10 @@ function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothi
         rho_filtered_derivs_normsq.gradient
     end
 
-    nonzero_norm = abs(den_helper) > zero(den_helper)
+    nonzero_norm = !iszero(den_helper)
 
     den_eff = sqrt(ifelse(nonzero_norm, den_helper, oneunit(den_helper)))
+    rho_filtered = rho_filtered_no_dilation + dilation_distance * den_eff
     d = (eta - rho_filtered) / den_eff
     d_R = d / R_smoothing
 
@@ -191,7 +194,9 @@ function smoothed_projection(rho_filtered, rho_filtered_derivs_normsq, R_smoothi
     rho_plus_eff_projected  = tanh_projection(rho_filtered_plus,  beta, eta)
 
     rho_projected_smoothed = (1 - F_plus) * rho_minus_eff_projected + F_plus * rho_plus_eff_projected
-    tape = (; F_plus, F_minus, d, d_R, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected)
+    rho_projected = tanh_projection(rho_filtered, beta, eta)
+
+    tape = (; F_plus, F_minus, d, d_R, rho_filtered, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected)
     return ifelse(needs_smoothing, rho_projected_smoothed, rho_projected), tape
 end
 
@@ -202,7 +207,7 @@ end
 
 function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
 
-    (; rho_filtered, grid, beta, eta, cacheval) = solver
+    (; rho_filtered, grid, beta, eta, dilation_distance, cacheval) = solver
     (; interp_solver, adj_rho_filtered_interp) = cacheval
     # (; interp_solver, adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian) = cacheval
 
@@ -223,8 +228,8 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
             (haskey(rho_filtered_interp, :hessian) ? (; hessian = view(rho_filtered_interp.hessian, i, :, :)) : (;))...
         )
         rho_filtered_interp_derivs_normsq = map(Base.Fix1(sum, abs2), rho_filtered_interp_derivs)
-        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta)
-        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta)
+        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
+        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
         adj_rho_filtered_interp.value[i] = adj_rho_f
         adj_rho_filtered_interp.gradient[i, :] .= 2adj_rho_derivs_normsq.gradient .* rho_filtered_interp_derivs.gradient
         if haskey(rho_filtered_interp, :hessian)
@@ -237,8 +242,8 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
     return (; rho_filtered=adj_interp_prob.data, grid=nothing, target_points=nothing)
 end
 
-function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho_filtered, rho_filtered_derivs_normsq, R_smoothing, beta, eta)
-    (; F_plus, F_minus, d, d_R, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected) = tape
+function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho_filtered_no_dilation, rho_filtered_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
+    (; F_plus, F_minus, d, d_R, rho_filtered, rho_projected, den_helper, den_eff, nonzero_norm, needs_smoothing, rho_filtered_minus, rho_filtered_plus, rho_minus_eff_projected, rho_plus_eff_projected) = tape
 
     adj_rho_projected = ifelse(needs_smoothing, zero(adj_rho_projected_maybe_smoothed), adj_rho_projected_maybe_smoothed)
     adj_rho_filtered  = adjoint_tanh_projection(adj_rho_projected, rho_filtered, beta, eta)
@@ -258,7 +263,9 @@ function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho
     
     adj_d = adj_d_R / R_smoothing
     adj_rho_filtered -= adj_d / den_eff
+    adj_rho_filtered_no_dilation = adj_rho_filtered
     adj_den_eff -= adj_d * d / den_eff
+    adj_den_eff += dilation_distance * adj_rho_filtered
     adj_den_helper = ifelse(nonzero_norm, adj_den_eff, zero(adj_den_eff)) / 2den_eff
 
     adj_rho_filtered_derivs_normsq = (;
@@ -266,6 +273,6 @@ function adjoint_smoothed_projection(adj_rho_projected_maybe_smoothed, tape, rho
         (haskey(rho_filtered_derivs_normsq, :hessian) ? (; hessian = adj_den_helper * R_smoothing^2) : (;))...
     )
 
-    return adj_rho_filtered, adj_rho_filtered_derivs_normsq
+    return adj_rho_filtered_no_dilation, adj_rho_filtered_derivs_normsq
 end
 end
