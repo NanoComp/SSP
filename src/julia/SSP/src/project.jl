@@ -122,7 +122,9 @@ function proj_solve!(solver, alg::SSPAlg)
             (haskey(rho_filtered_interp, :hessian) ? (; hessian = view(rho_filtered_interp.hessian, i, :, :)) : (;))...
         )
         rho_filtered_interp_derivs_normsq = map(Base.Fix1(sum, abs2), rho_filtered_interp_derivs)
-        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
+        beta_loc = beta isa Number ? beta : beta[i]
+        eta_loc = eta isa Number ? eta : eta[i]
+        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta_loc, eta_loc, dilation_distance)
         rho_projected[i] = rho_p
     end
     return (; value=rho_projected, tape=nothing)
@@ -226,8 +228,10 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
             (haskey(rho_filtered_interp, :hessian) ? (; hessian = view(rho_filtered_interp.hessian, i, :, :)) : (;))...
         )
         rho_filtered_interp_derivs_normsq = map(Base.Fix1(sum, abs2), rho_filtered_interp_derivs)
-        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
-        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta, eta, dilation_distance)
+        beta_loc = beta isa Number ? beta : beta[i]
+        eta_loc = eta isa Number ? eta : eta[i]
+        rho_p, tape = smoothed_projection(rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta_loc, eta_loc, dilation_distance)
+        adj_rho_f, adj_rho_derivs_normsq = adjoint_smoothed_projection(adj_proj, tape, rho_f, rho_filtered_interp_derivs_normsq, R_smoothing, beta_loc, eta_loc, dilation_distance)
         adj_rho_filtered_interp.value[i] = adj_rho_f
         adj_rho_filtered_interp.gradient[i, :] .= 2adj_rho_derivs_normsq.gradient .* rho_filtered_interp_derivs.gradient
         if haskey(rho_filtered_interp, :hessian)
