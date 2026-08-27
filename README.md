@@ -25,6 +25,7 @@ The Python import package is `ssp_topopt`:
 
 ```python
 from ssp_topopt import conic_filter, get_conic_radius_from_eta_e, ssp1_bilinear,ssp2
+from ssp_topopt import constraint_solid, constraint_void
 ```
 
 For local development:
