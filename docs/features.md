@@ -14,8 +14,8 @@ currently implements; **please keep it up to date when adding or removing functi
 | Second-order subpixel smoothing (SSP2), differentiable through topology changes | ✅ `ssp2` | ✅ `ssp2` |
 | Finite and infinite projection strength (0 ≤ β ≤ ∞) | ✅ | ✅ |
 | Dilation/erosion of the projected contour | ✅ `dilation_distance` argument | ❌ |
-| Minimum-lengthscale constraints for solid and void | ✅ `constraint_solid`, `constraint_void` | ❌ |
-| Lengthscale constraints compatible with any SSP order | ✅ (constraints act on `rho_filtered`/`rho_projected`) | ❌ |
+| Minimum-lengthscale constraints for solid and void | ✅ `constraint_solid`, `constraint_void` | ✅ `constraint_solid`, `constraint_void` |
+| Lengthscale constraints compatible with any SSP order | ✅ (constraints act on `rho_filtered`/`rho_projected`) | ✅ (constraints act on `rho_filtered`/`rho_projected`) |
 | Reverse-mode automatic differentiation | ✅ hand-written adjoints, exposed to Zygote.jl and friends through a ChainRulesCore.jl extension | ✅ through JAX (`grad`, `jit`, `vmap`) |
 | Dimensionality | N-dimensional code paths (only 2D is currently tested) | 2D only |
 | Periodic filter axes | ❌ | ✅ `periodic_axes` argument of `conic_filter` |
@@ -37,7 +37,7 @@ currently implements; **please keep it up to date when adding or removing functi
 
 Contributions welcome — these are known gaps rather than fundamental limitations:
 
-* Python: cubic-interpolation SSP1, dilation/erosion, and minimum-lengthscale constraints.
+* Python: cubic-interpolation SSP1 and dilation/erosion.
 * Python: a low-level API with reusable workspaces.
 * Julia: `get_conic_radius_from_eta_e`-style helpers and periodic filter axes.
 * Both: validated 3D usage and anisotropic grid spacings in the projection.
