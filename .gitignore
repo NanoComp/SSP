@@ -14,6 +14,13 @@ poetry.lock
 Pipfile.lock
 .pdm-python
 
+# Julia environments and artifacts
+Manifest.toml
+Manifest-v*.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
 # Test/tool caches
 .pytest_cache/
 .mypy_cache/
