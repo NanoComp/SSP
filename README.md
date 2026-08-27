@@ -6,7 +6,14 @@ This is a repository for code implementing the **smoothed subpixel projection (S
 * G. Romano, R. Arrieta, and S. G. Johnson, [“Differentiating through binarized topology changes: Second-order subpixel-smoothed projection,”](http://arxiv.org/abs/2601.10737) arXiv.org e-Print archive, 2601.10737, January 2026.
 * R. Arrieta, G. Romano, and S. G. Johnson, [“Hyperparameter-free minimum-lengthscale constraints for topology optimization,”](http://arxiv.org/abs/2507.16108) arXiv.org e-Print archive, 2507.16108, July 2025.
 
+## Documentation
+
+* [Supported features](docs/features.md) — a running list of what the Julia and Python
+  packages each implement, along with known limitations and gaps.
+
 ## Installation
+
+### Python
 
 Install the PyPI distribution:
 
@@ -25,3 +32,15 @@ For local development:
 ```bash
 python -m pip install -e ".[dev]"
 ```
+
+### Julia
+
+The Julia package is not registered yet, so install it from this repository:
+
+```julia
+using Pkg
+Pkg.develop(path="src/julia/SSP")
+```
+
+See [`src/julia/SSP/README.md`](src/julia/SSP/README.md) for usage of both the high-level
+and low-level Julia APIs.
