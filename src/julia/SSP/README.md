@@ -3,6 +3,9 @@
 A Smoothed Subpixel Projection (SSP) package for topology optimization in Julia.
 Supports N-dimensional data and reverse-mode automatic differentiation with minimal allocations.
 
+For a feature-by-feature comparison of this package with its Python cousin, see
+[`docs/features.md`](../../../docs/features.md).
+
 ## Usage
 
 This package provides a high-level API nearly identical to its python cousin.
