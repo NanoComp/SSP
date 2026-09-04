@@ -6,10 +6,11 @@ import SSP: init!, solve!, adjoint_solve!
 public ProjectionProblem, SSP1_linear, SSP1, SSP2
 
 """
-    ProjectionProblem(; rho_filtered, grid, target_points, beta=Inf, eta=1/2, dilation_distance=0)
+    ProjectionProblem(; rho_filtered, grid, target_points, beta=Inf, eta=1/2, dx=maximum(step, grid), dilation_distance=0)
 
 Define a problem for projecting smoothed data `rho_filtered` defined on a `grid`, i.e. a tuple of range, at a list of selected `target_points`, i.e. a vector of coordinate tuples.
 The projection pushes `rho` values above `eta` towards 1 and `rho` values below `eta` towards 0 with a stiffness parameter `beta`.
+The `dx` parameter should be the the maximum nearest-neighbor distance between points in the output grid, however it defaults to using the input grid.
 The `dilation_distance` parameter sets an approximate length how far to expand or contract the contour of the projection threshold.
 When `dilation_distance` is positive the region above the threshold is dilated and when negative it is eroded.
 """
@@ -19,7 +20,8 @@ Base.@kwdef struct ProjectionProblem{D,G,T,B,DD}
     target_points::T
     beta::B = eltype(rho_filtered)(Inf)
     eta::B = eltype(rho_filtered)(1//2)
-    dilation_distance::DD=0
+    dx::DD = maximum(step, grid)
+    dilation_distance::DD = zero(dx)
 end
 
 function Base.copy(prob::ProjectionProblem)
@@ -29,6 +31,7 @@ function Base.copy(prob::ProjectionProblem)
         target_points = copy(prob.target_points),
         beta = prob.beta,
         eta = prob.eta,
+        dx = prob.dx,
         dilation_distance = prob.dilation_distance,
     )
     return newprob
@@ -40,6 +43,7 @@ mutable struct ProjectionSolver{D,G,T,B,DD,A,C}
     const target_points::T
     beta::B
     eta::B
+    dx::DD
     dilation_distance::DD
     alg::A
     cacheval::C
@@ -75,7 +79,7 @@ The `smoothing_radius` keyword sets the radius of the smoothing kernel relative 
 SSP2(; kws...) = SSPAlg(; interp=CubicInterp(; deriv=ValueWithGradientAndHessian()), kws...)
 
 function init!(prob::ProjectionProblem, alg::SSPAlg)
-    (; rho_filtered, grid, target_points, beta, eta, dilation_distance) = prob
+    (; rho_filtered, grid, target_points, beta, eta, dx, dilation_distance) = prob
 
     interp_prob = InterpolationProblem(; data=rho_filtered, grid, target_points)
     interp_alg = alg.interp
@@ -93,7 +97,7 @@ function init!(prob::ProjectionProblem, alg::SSPAlg)
 
     cacheval = (; interp_solver, rho_projected, adj_rho_filtered_interp)# adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian)
 
-    return ProjectionSolver(rho_filtered, grid, target_points, beta, eta, dilation_distance, alg, cacheval)
+    return ProjectionSolver(rho_filtered, grid, target_points, beta, eta, dx, dilation_distance, alg, cacheval)
 end
 
 function solve!(solver::ProjectionSolver)
@@ -102,15 +106,12 @@ end
 
 function proj_solve!(solver, alg::SSPAlg)
 
-    (; rho_filtered, grid, beta, eta, dilation_distance, cacheval) = solver
+    (; rho_filtered, grid, beta, eta, dx, dilation_distance, cacheval) = solver
     (; interp_solver, rho_projected) = cacheval
 
     interp_solver.data = rho_filtered
     rho_filtered_interp = solve!(interp_solver)
 
-    dx_all = step.(grid)
-    @assert allequal(dx_all)
-    dx = first(dx_all)
     R_smoothing = alg.smoothing_radius * dx
 
     for (i, rho_f) in zip(eachindex(rho_projected), rho_filtered_interp.value)
@@ -207,7 +208,7 @@ end
 
 function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
 
-    (; rho_filtered, grid, beta, eta, dilation_distance, cacheval) = solver
+    (; rho_filtered, grid, beta, eta, dx, dilation_distance, cacheval) = solver
     (; interp_solver, adj_rho_filtered_interp) = cacheval
     # (; interp_solver, adj_rho_filtered_value, adj_rho_filtered_gradient, adj_rho_filtered_hessian) = cacheval
 
@@ -215,9 +216,6 @@ function adjoint_proj_solve!(solver, alg::SSPAlg, adj_sol, tape)
     interp_solver.data = rho_filtered
     rho_filtered_interp = solve!(interp_solver)
 
-    dx_all = step.(grid)
-    @assert allequal(dx_all)
-    dx = first(dx_all)
     R_smoothing = alg.smoothing_radius * dx
 
     for (i, adj_proj, rho_f) in zip(eachindex(adj_rho_filtered_interp.value), adj_sol.value, rho_filtered_interp.value)
