@@ -1,35 +1,35 @@
 """Minimum-lengthscale (geometric) constraints for topology optimization.
 
 These are the geometric constraints of Zhou et al. (2015) combined with the
-hyperparameter-free thresholds derived by Arrieta et al. (2025). The constraints
+hyperparameter-free thresholds derived by Arrieta et al. (2026). The constraints
 penalize solid (or void) features whose lengthscale falls below a target value,
-and are formulated purely in terms of the filtered density and the projected
-density. Consequently they work with *any* order of subpixel smoothing --
-`ssp1_bilinear`, `ssp2`, or even a plain `tanh_projection` -- since the
-projection only enters through `rho_projected`.
+and are formulated purely in terms of the filtered density ρ̃ (`rho_filtered`)
+and the projected density ρ̄ (`rho_projected`). Consequently they work with
+*any* order of subpixel smoothing -- `ssp1_bilinear`, `ssp2`, or even a plain
+`tanh_projection` -- since the projection only enters through ρ̄.
 
 The solid constraint reads
 
-    g_s = (1/N) Σ_i I_s,i [min(rho_filtered_i - eta_e, 0)]^2 ,
-    I_s = rho_projected * exp(-c |∇ rho_filtered|^2) ,
+    g_s = (1/N) Σ_i I_s,i [min(ρ̃_i - η_e, 0)]^2 ,
+    I_s = ρ̄ * exp(-c |∇ρ̃|^2) ,
 
 and the void constraint is the complementary expression
 
-    g_v = (1/N) Σ_i I_v,i [min(eta_d - rho_filtered_i, 0)]^2 ,
-    I_v = (1 - rho_projected) * exp(-c |∇ rho_filtered|^2) ,
+    g_v = (1/N) Σ_i I_v,i [min(η_d - ρ̃_i, 0)]^2 ,
+    I_v = (1 - ρ̄) * exp(-c |∇ρ̃|^2) ,
 
 where the structural functions I_s and I_v single out the "inflection regions"
-of the design (the interior of a feature, where the filtered density is
-stationary), and eta_e, eta_d are the eroded/dilated threshold points of the
-conic filter. Following Arrieta et al., the decay rate is c = 64 R^2 and the
-constraint threshold is eps = 1e-8, where R is the conic filter radius; the
-constraint is well behaved for target_length / R roughly in [0.25, 1.5].
+of the design (the interior of a feature, where ρ̃ is stationary), and η_e, η_d
+are the eroded/dilated threshold points of the conic filter. Following Arrieta
+et al., the decay rate is c = 64 R^2 and the constraint threshold is eps = 1e-8,
+where R is the conic filter radius; the constraint is well behaved for
+target_length / R roughly in [0.25, 1.5].
 
 Refs:
 
 R. Arrieta, G. Romano, and S. G. Johnson, "Hyperparameter-free minimum-lengthscale
-constraints for topology optimization," arXiv.org e-Print archive, 2507.16108,
-July 2025.
+constraints for topology optimization," Structural and Multidisciplinary
+Optimization, vol. 69, p. 210, September 2026.
 
 M. Zhou, B. S. Lazarov, F. Wang, and O. Sigmund, "Minimum length scale in topology
 optimization by geometric constraints," Computer Methods in Applied Mechanics and
@@ -46,7 +46,7 @@ from jax import numpy as jnp
 
 from .utils import ArrayLikeType, gradient
 
-# Hyperparameters derived in section 4.1 of Arrieta et al. (2025). The decay rate
+# Hyperparameters derived in section 4.1 of Arrieta et al. (2026). The decay rate
 # is expressed relative to the square of the conic filter radius, i.e. the actual
 # decay rate is c = DEFAULT_CONSTRAINT_DECAYRATE * conic_radius**2.
 DEFAULT_CONSTRAINT_THRESHOLD = 1e-8
@@ -54,9 +54,9 @@ DEFAULT_CONSTRAINT_DECAYRATE = 64.0
 
 
 def solid_threshold(lengthscale_ratio: float):
-    """The eroded threshold point eta_e of a conic filter.
+    """The eroded threshold point η_e of a conic filter.
 
-    Ref: Eq. (9) of Arrieta et al. (2025), originally from Qian and Sigmund (2013).
+    Ref: Eq. (9) of Arrieta et al. (2026), originally from Qian and Sigmund (2013).
 
     Args:
         lengthscale_ratio: the ratio of the target lengthscale to the conic
@@ -74,9 +74,9 @@ def solid_threshold(lengthscale_ratio: float):
 
 
 def void_threshold(lengthscale_ratio: float):
-    """The dilated threshold point eta_d of a conic filter.
+    """The dilated threshold point η_d of a conic filter.
 
-    Ref: Eq. (12) of Arrieta et al. (2025), originally from Qian and Sigmund (2013).
+    Ref: Eq. (12) of Arrieta et al. (2026), originally from Qian and Sigmund (2013).
 
     Args:
         lengthscale_ratio: the ratio of the target lengthscale to the conic
@@ -160,16 +160,16 @@ def constraint_solid(
 ):
     """Calculate a solid minimum-lengthscale constraint function.
 
-    This technique takes smoothed data, e.g. from filtering, `rho_filtered` and
-    binary data, e.g. from projection, `rho_projected` both defined on the same
-    grid, and measures whether features in the solid region, i.e. where
-    `rho_projected` takes values of 1, violate the minimum `target_length`.
+    This technique takes smoothed data ρ̃, e.g. from filtering, `rho_filtered`
+    and binary data ρ̄, e.g. from projection, `rho_projected` both defined on the
+    same grid, and measures whether features in the solid region, i.e. where ρ̄
+    takes values of 1, violate the minimum `target_length`.
 
     The returned value is normalized by the constraint threshold, so the
     constraint is satisfied when the value is nonpositive and violated when it is
     positive. It can therefore be handed directly to a nonlinear optimizer such
     as `nlopt` as an inequality constraint. The unnormalized constraint value of
-    Eq. (7) of Arrieta et al. (2025) is `(value + 1) * constraint_threshold`.
+    Eq. (7) of Arrieta et al. (2026) is `(value + 1) * constraint_threshold`.
 
     Any projection may be used to produce `rho_projected`, including
     `ssp1_bilinear`, `ssp2`, and `tanh_projection`.
@@ -221,16 +221,16 @@ def constraint_void(
 ):
     """Calculate a void minimum-lengthscale constraint function.
 
-    This technique takes smoothed data, e.g. from filtering, `rho_filtered` and
-    binary data, e.g. from projection, `rho_projected` both defined on the same
-    grid, and measures whether features in the void region, i.e. where
-    `rho_projected` takes values of 0, violate the minimum `target_length`.
+    This technique takes smoothed data ρ̃, e.g. from filtering, `rho_filtered`
+    and binary data ρ̄, e.g. from projection, `rho_projected` both defined on the
+    same grid, and measures whether features in the void region, i.e. where ρ̄
+    takes values of 0, violate the minimum `target_length`.
 
     The returned value is normalized by the constraint threshold, so the
     constraint is satisfied when the value is nonpositive and violated when it is
     positive. It can therefore be handed directly to a nonlinear optimizer such
     as `nlopt` as an inequality constraint. The unnormalized constraint value of
-    Eq. (10) of Arrieta et al. (2025) is `(value + 1) * constraint_threshold`.
+    Eq. (10) of Arrieta et al. (2026) is `(value + 1) * constraint_threshold`.
 
     Any projection may be used to produce `rho_projected`, including
     `ssp1_bilinear`, `ssp2`, and `tanh_projection`.

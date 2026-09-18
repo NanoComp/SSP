@@ -2,9 +2,10 @@
 
 The reference behavior is the one described in R. Arrieta, G. Romano, and
 S. G. Johnson, "Hyperparameter-free minimum-lengthscale constraints for topology
-optimization," arXiv:2507.16108 (2025): with the derived hyperparameters, the
-constraint is violated (positive) when the physical lengthscale of a feature
-falls below the target lengthscale and satisfied (nonpositive) otherwise.
+optimization," Struct. Multidisc. Optim. 69, 210 (2026): with the derived
+hyperparameters, the constraint is violated (positive) when the physical
+lengthscale of a feature falls below the target lengthscale and satisfied
+(nonpositive) otherwise.
 """
 
 import unittest
@@ -29,7 +30,7 @@ class TestThresholdFunctions(unittest.TestCase):
     """The conic-filter threshold points of Qian and Sigmund (2013)."""
 
     def test_known_values(self):
-        # Eqs. (9) and (12) of Arrieta et al. (2025).
+        # Eqs. (9) and (12) of Arrieta et al. (2026).
         self.assertAlmostEqual(float(solid_threshold(0.0)), 0.5)
         self.assertAlmostEqual(float(solid_threshold(1.0)), 0.75)
         self.assertAlmostEqual(float(solid_threshold(2.0)), 1.0)

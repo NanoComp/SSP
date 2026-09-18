@@ -15,8 +15,8 @@ The example has two parts:
    constraints on and repairs the design, at a small cost in the figure of merit.
 
 Ref: R. Arrieta, G. Romano, and S. G. Johnson, "Hyperparameter-free
-minimum-lengthscale constraints for topology optimization," arXiv.org e-Print
-archive, 2507.16108, July 2025.
+minimum-lengthscale constraints for topology optimization," Structural and
+Multidisciplinary Optimization, vol. 69, p. 210, September 2026.
 """
 
 import time
@@ -199,12 +199,19 @@ def optimization_demo():
         x_opt = opt.optimize(np.asarray(x_init, dtype=float))
         elapsed = time.perf_counter() - start
 
+        # The last entry of the histories is the last design nlopt *evaluated*,
+        # which is not necessarily the one it returns, so recompute at x_opt.
+        x_opt_jnp = jnp.asarray(x_opt)
+        fom_opt = float(objective_and_grad(x_opt_jnp)[0])
+        solid_opt = float(constraints_and_grad["solid"](x_opt_jnp)[0])
+        void_opt = float(constraints_and_grad["void"](x_opt_jnp)[0])
+
         label = "constrained" if constrained else "unconstrained"
         print(
             f"  {label}: {maxeval} evaluations in {elapsed:6.1f}s "
-            f"FOM={fom_history[-1]:.4e} "
-            f"solid={constraint_history['solid'][-1]:+.3e} "
-            f"void={constraint_history['void'][-1]:+.3e}"
+            f"FOM={fom_opt:.4e} "
+            f"solid={solid_opt:+.3e} "
+            f"void={void_opt:+.3e}"
         )
         return x_opt
 
